@@ -88,7 +88,7 @@ const DAYS = ['一', '二', '三', '四', '五', '直播', '回看'];
 const SLOTN = ['上午', '下午', '傍晚', '晚上'];
 const SKY = ['#bfe3ff', '#ffe9b0', '#ffb990', '#3a3170'];
 const BEATS = ['開場', '節目', '互動', '節目', '加長'];
-const TIME = 15; // 直播每一段的作答秒數
+const TIME = 10; // 直播中每次輪到草民的秒數
 const AUTO = location.search.includes('auto');
 
 let G = null;
@@ -219,7 +219,7 @@ function render() {
     const C = G.cur;
     const prog = BEATS.slice(0, C.max).map((n, i) => `<span class="${i === C.beat ? 'now' : i < C.beat ? 'past' : ''}">${n}</span>`).join('');
     app.innerHTML = `<header class="top"><span class="badge-live">LIVE</span><span class="when"><b>${V.title}</b></span>
-        <span class="prog">${prog}</span><span class="gauge">心力 ${pips(G.heart, 5, '')}</span></header>
+        <span class="prog">${prog}</span></header>
       <div class="live"><div class="video">
         <div class="screen"><span class="viewers">${C.viewers} 人正在觀看</span>
           <div class="avatar stk">${BODY.kaoru(V.mood || 'normal')}</div><p class="caption">${V.text}</p></div></div>
@@ -248,7 +248,7 @@ $('#app').addEventListener('click', e => {
 function title() {
   G = null;
   view({ mode: 'title',
-    text: '你是奈實，也是她演的 VTuber「薰草」。\n平常安排自己的一週，直播日戴上面具開播。\n隔天，再回看昨晚的自己。',
+    text: '平常，你是 VTuber「薰草」本人，安排自己的一週。\n直播的晚上，你坐進聊天室，當一位草民看她。\n隔天，再回看昨晚的自己。',
     choices: go('開始', pickSkill, '一季四週，約十分鐘') });
 }
 
@@ -397,7 +397,7 @@ function ideaDone(n, score) {
     (Math.random() < 0.25 ? unlockRandom('路上看到有趣的東西') : ''));
 }
 
-// ---------- 直播：玩家演薰草，每一段限時作答 ----------
+// ---------- 直播：玩家是聊天室裡的草民，節目自己進行 ----------
 function streamMenu() {
   const c = [];
   for (const k in ROUTES) {
@@ -409,136 +409,138 @@ function streamMenu() {
       c.push({ i: 'wish', t: `季末大企劃：${ROUTES[k].n}`, s: '心力 −3　靈感 −3', off: G.insp < 3, on: () => startStream(k, true) });
     }
   }
-  view({ mode: 'day', mood: namiMood(), title: '今晚播什麼？', text: `準備程度 ${G.prep}/2。\n開播後每一段有 ${TIME} 秒決定怎麼接話。`, choices: c });
+  view({ mode: 'day', mood: namiMood(), title: '今晚播什麼？', text: `準備程度 ${G.prep}/2。\n開播之後，你會坐到聊天室裡，當一位草民。`, choices: c });
 }
 
 function startStream(k, big) {
   let used = 0;
   if (big) { G.insp -= 3; used = 2; } else if (G.insp) { G.insp--; used = 1; }
   const x = spend(big ? 3 : ROUTES[k].c);
-  G.cur = { k, big, q: G.r[k].st + G.prep + used - (x ? 1 : 0), beat: 0, max: 4, bonus: 0, clips: [], chat: [],
-    viewers: 40 + rnd(30) + G.buzz * 15, loose: G.kept > 0, slip: false, ext: false, used: [] };
+  G.cur = { k, big, q: G.r[k].st + G.prep + used - (x ? 1 : 0), beat: 0, max: 4, tips: 0, acts: 0, clips: [], chat: [],
+    viewers: 40 + rnd(30) + G.buzz * 15, loose: G.kept > 0, slip: false, laughed: false, wished: false, used: [],
+    cap: '', mood: 'normal' };
   G.buzz = 0;
-  beat('「各位草安～」她戴上薰草的聲音，開播了。');
+  beat([{ cap: '「各位草安～」薰草開播了。', chat: ['路過的草', '草安～'] }]);
 }
 
 const say = (n, t, c) => G.cur.chat.push({ n, t, c });
 
-function live(o) {
+// 節目自己一句一句進行，播完才輪到草民
+function play(steps, then) {
   const C = G.cur;
-  view(Object.assign({ mode: 'night', mood: 'normal', title: `${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}`, timer: TIME,
-    timeout: () => { addStress(1); C.viewers -= 5; say('路過的草', '？？？'); done('她僵住了幾秒，沒有接話。冷場。'); } }, o));
+  let i = 0;
+  const run = () => {
+    if (i >= steps.length) return then();
+    const s = steps[i++];
+    if (s.chat) say(s.chat[0], s.chat[1], s.chat[2]);
+    if (s.cap) C.cap = s.cap;
+    if (s.mood) C.mood = s.mood;
+    C.viewers += rnd(5) - 1;
+    view({ mode: 'night', mood: C.mood, title: `${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}`, text: C.cap, line: '節目進行中……', choices: [] });
+    TM = setTimeout(run, AUTO ? 0 : 1800);
+  };
+  run();
 }
 
-function done(m, clip) {
-  const C = G.cur;
-  if (clip) C.clips.push(Object.assign({ k: C.k }, clip));
-  C.beat++;
-  C.beat < C.max ? beat(m) : endStream(m);
-}
-
-function beat(pre) {
-  const C = G.cur;
-  C.viewers += rnd(7) - 2;
-  for (let i = 0; i < 1 + rnd(2); i++) say(pick(FANS), pick(AMBIENT));
-  const kind = ['prompt', 'show', 'interact', 'show', 'prompt'][C.beat];
-  if (kind === 'show') return showBeat(pre);
-  if (kind === 'interact') {
-    const l = locked();
-    if (l.length && Math.random() < 0.6) return wishBeat(pre, l[0]);
-    if (Math.random() < 0.5) return scBeat(pre);
-  }
-  promptBeat(pre);
-}
-
-// 三選一：照人設、說真心話（留下過片段或剛笑場過才說得出口）、帶過
-function tri(pre, from, q, p, onA) {
-  const C = G.cur;
-  live({ text: pre, line: `${from}：「${q}」　要怎麼回？`, choices: [
-    { t: '照薰草的人設回', s: p.a, on: () => {
-      C.viewers += 2; if (onA) onA();
-      done(p.a + '\n很薰草的回答。', { real: false, text: `${from}問「${q}」，她回${p.a}` }); } },
-    { t: '說真心話', s: C.loose ? p.b : '……說不出口', off: !C.loose, struck: !C.loose, on: () => {
-      C.viewers += 6; say(pick(FANS), '笑死'); say(pick(FANS), '今天的薰草好鬆');
-      done(p.b + '\n說完她自己先笑了。', { real: true, text: `${from}問「${q}」，她回${p.b}` }); } },
-    { t: '帶過', s: p.c, on: () => done(p.c) },
-  ] });
-}
-
-function promptBeat(pre) {
+function qa() {
   const C = G.cur;
   const rest = PROMPTS.filter(p => !C.used.includes(p));
   const p = pick(rest.length ? rest : PROMPTS);
   C.used.push(p);
-  say(p.from, p.q, 'hl');
-  tri(pre, p.from, p.q, p);
+  const real = C.loose && Math.random() < 0.6;
+  const ans = real ? p.b : p.a;
+  C.clips.push({ k: C.k, real, text: `${p.from}問「${p.q}」，她回${ans}` });
+  const steps = [{ chat: [p.from, p.q, 'hl'], cap: `她唸出留言：「${p.q}」`, mood: 'normal' }, { cap: ans, mood: real ? 'laugh' : 'normal' }];
+  if (real) steps.push({ chat: [pick(FANS), '今天的薰草好鬆'], cap: ans + '\n說完她自己先笑了。' });
+  return steps;
 }
 
-function scBeat(pre) {
-  const C = G.cur;
-  C.bonus += 4;
-  say('茶泡', 'SC ＄4　一直支持妳', 'sc');
-  tri(pre, '茶泡', '（丟了一筆很大的 SC）一直支持妳',
-    { a: '「謝謝！我會繼續加油的。」', b: '「太多了啦，留著自己吃飯。」', c: '「謝謝 SC～」' },
-    () => { addStress(2); say('薰衣草田', '薰草加油'); });
-}
-
-function wishBeat(pre, w) {
-  const C = G.cur;
-  const n = ROUTES[w].n;
-  say('小穗', `SC ＄1　想看薰草的${n}！`, 'sc');
-  C.bonus += 1;
-  const unlock = '\n★ 解鎖了「' + n + '」企劃（要不要做，之後由妳決定）。';
-  live({ text: pre, line: `小穗許願：「想看薰草的${n}！」　要怎麼回？`, choices: [
-    { t: '答應下來', s: `「好啊，下次來試試${n}。」`, on: () => { G.r[w].st = 1; addStress(1); C.viewers += 4; done(`「好啊，下次來試試${n}。」\n聊天室開始期待了。` + unlock); } },
-    { t: '先不答應', s: '「我想想喔。」', on: () => { G.r[w].st = 1; done('「我想想喔。」' + unlock); } },
-  ] });
-}
-
-function showBeat(pre) {
+function show(first) {
   const C = G.cur;
   const R = ROUTES[C.k];
-  if (Math.random() < clamp(0.6 - 0.12 * C.q, 0.12, 0.7)) {
-    C.slip = true;
-    say(pick(FANS), '欸？');
-    return live({ text: pre, mood: 'laugh', line: `出包了：${R.slip}　要怎麼辦？`, choices: [
-      { t: '笑出來', s: '就這樣笑了，接著做下去', on: () => {
-        C.loose = true; C.viewers += 8; say(pick(FANS), '笑死'); say(pick(FANS), '剛剛那是本音嗎'); say(pick(FANS), '好可愛');
-        done('她笑出聲，不是薰草的笑法。然後接著做下去。', { real: true, text: R.slip + '她笑了出來。' }); } },
-      { t: '裝作沒事', s: '馬上圓回去，維持薰草的樣子', on: () => {
-        addStress(1);
-        done('她馬上圓了回去，聲音沒有抖。', { real: false, text: R.slip + '她馬上圓了回去。' }); } },
-    ] });
+  const line = R.ok[first ? 0 : 1];
+  if (Math.random() >= clamp(0.6 - 0.12 * C.q, 0.12, 0.7)) {
+    C.clips.push({ k: C.k, real: false, text: line });
+    return [{ cap: line, mood: 'normal' }, { chat: [pick(FANS), pick(AMBIENT)] }];
   }
-  const line = R.ok[C.beat === 1 ? 0 : 1];
-  live({ text: pre, line: `節目進行中：${line}　要怎麼做？`, choices: [
-    { t: '照流程穩穩做', s: '不出錯', on: () => { C.viewers += 2; done(line, { real: false, text: line }); } },
-    { t: '多衝一點', s: '心力 −1，氣氛更好', on: () => { const x = spend(1); C.viewers += 7; C.bonus += 1; say(pick(FANS), '8888'); done(line + '她多加了一段，聊天室很熱。' + x, { real: false, text: line }); } },
-  ] });
+  C.slip = true;
+  const laugh = (C.loose || G.stress < 5) && Math.random() < 0.65;
+  const steps = [{ cap: R.slip, mood: 'normal', chat: [pick(FANS), '欸？'] }];
+  if (laugh) {
+    C.loose = true;
+    C.laughed = true;
+    C.clips.push({ k: C.k, real: true, text: R.slip + '她笑了出來。' });
+    steps.push({ cap: '她笑出聲。不是薰草的笑法。', mood: 'laugh', chat: [pick(FANS), '笑死'] });
+    steps.push({ chat: [pick(FANS), '剛剛那是本音嗎'] });
+  } else {
+    addStress(1);
+    C.clips.push({ k: C.k, real: false, text: R.slip + '她馬上圓了回去。' });
+    steps.push({ cap: '她馬上圓了回去，聲音沒有抖。', mood: 'normal', chat: [pick(FANS), '沒事沒事'] });
+  }
+  return steps;
+}
+
+function beat(pre) {
+  const C = G.cur;
+  const kind = ['qa', 'show', 'qa', 'show', 'qa'][C.beat];
+  const steps = pre.concat(kind === 'qa' ? qa() : show(C.beat === 1));
+  play(steps, turn);
+}
+
+// 輪到草民：限時選一件事，沒選就是沉默
+function turn() {
+  const C = G.cur;
+  const next = (reply, mine, cls) => {
+    if (mine) { say('你', mine, cls || 'me'); C.acts++; }
+    C.beat++;
+    const pre = reply ? [{ cap: reply }] : [];
+    C.beat < C.max ? beat(pre) : endStream(pre);
+  };
+  const c = [{ i: 'chat', t: '留言「草安！」', s: '打個招呼', on: () => next('「草安～謝謝你來。」', '草安！') }];
+  if (C.laughed) c.push({ i: 'chat', t: '留言「笑死，好可愛」', s: '回應她剛剛那聲笑', on: () => { addStress(-1); next('她看到你的留言，又笑了一下。', '笑死，好可愛'); } });
+  if (C.slip) c.push({ i: 'chat', t: '留言「這不是薰草」', s: '看過她出包才會出現', on: () => { addStress(1); next('她看到了。聊天室安靜了一秒。', '這不是薰草'); } });
+  const l = locked();
+  if (l.length && !C.wished) {
+    const w = l[0];
+    c.push({ i: 'wish', t: `許願：想看${ROUTES[w].n}`, s: '解鎖新企劃，做不做由她決定', on: () => {
+      C.wished = true; G.r[w].st = 1; C.tips += 1;
+      next(`「${ROUTES[w].n}嗎……我想想喔。」\n★ 解鎖了「${ROUTES[w].n}」企劃。`, `SC ＄1　想看薰草的${ROUTES[w].n}！`, 'sc'); } });
+  }
+  c.push({ i: 'coin', t: '打賞（小）', s: '＄1', on: () => { C.tips += 1; next('「謝謝你的 SC～」', 'SC ＄1　辛苦了', 'sc'); } });
+  c.push({ i: 'coin', t: '打賞（大）', s: '＄4　給太多她會有壓力', on: () => { C.tips += 4; next('「欸、這麼多……謝謝。」她頓了一下。', 'SC ＄4　一直支持妳', 'sc'); } });
+  c.push({ i: 'quiet', t: '沉默', s: '只是看著', on: () => next('') });
+  view({ mode: 'night', mood: C.mood, title: `${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}`, text: C.cap,
+    line: '你是聊天室裡的一位草民。要做什麼？', choices: c, timer: TIME, timeout: () => next('') });
 }
 
 function endStream(pre) {
   const C = G.cur;
-  if (C.ext) return offAir(pre, false);
-  view({ mode: 'night', mood: 'normal', title: ROUTES[C.k].n, text: pre, line: '預定的節目做完了，聊天室還很熱。', choices: [
-    { t: '加長直播', s: '心力 −1，多聊一段，下播直接睡', on: () => { C.ext = true; C.max = 5; beat('「那再多聊一下好了。」' + spend(1)); } },
-    { t: '準時下播', s: '下播後還能做一件事', on: () => offAir('「今天就到這裡，草民晚安。」', true) }] });
+  // 聊天室夠熱、她還有力氣，就會多播一段
+  if (!C.ext && C.acts >= 2 && G.heart >= 1) {
+    C.ext = true;
+    C.max = 5;
+    G.heart--;
+    return beat(pre.concat([{ cap: '「留言好熱鬧，那再多聊一下好了。」' }]));
+  }
+  play(pre.concat([{ cap: '「今天就到這裡，草民晚安。」', chat: [pick(FANS), '晚安～'] }]), offAir);
 }
 
-function offAir(pre, onTime) {
+function offAir() {
   const C = G.cur;
-  const total = Math.max(1, 1 + Math.floor(C.q / 2) + C.bonus + Math.floor((C.viewers - 50) / 20));
+  const total = C.tips + 1 + Math.floor(C.q / 2) + rnd(2);
   G.money += total;
-  const m = pre + `\n\n下播後三十秒。${C.slip ? '她摘下耳機，想起剛剛出包的那一下，耳朵有點熱。' : '她摘下耳機，房間很安靜。'}\n今晚的打賞：${total}。`;
+  let m = `（回到奈實）下播後三十秒。\n${C.laughed ? '她摘下耳機，想起剛剛那聲笑，耳朵有點熱。' : '她摘下耳機，房間很安靜。'}\n今晚的打賞：${total}。`;
+  if (C.tips > C.q + 1) { addStress(2); m += '\n「收了這麼多，下次不能出錯。」'; }
   G.clips = C.clips.slice().sort((a, b) => b.real - a.real).slice(0, 3);
   if (C.big) G.bigDone = C.k;
   G.prep = 0;
+  const ext = C.ext;
   G.cur = null;
-  const c = onTime ? [
+  const c = ext ? go('直接睡', nextDay, '加長之後沒有力氣做別的事') : [
     { i: 'cut', t: '剪輯精華', s: '下一場會多一些人來看', on: () => { G.buzz = 1; nextDay(); } },
     { i: 'chat', t: '經營社群', s: '靈感 +1', on: () => { G.insp = clamp(G.insp + 1, 0, 5); nextDay(); } },
     { i: 'rest', t: '早點睡', s: '算作休息，明天回復較多', on: () => { G.rested = true; nextDay(); } },
-  ] : go('直接睡', nextDay, '加長之後沒有力氣做別的事');
+  ];
   view({ mode: 'day', mood: namiMood(), title: '下播了', text: m, choices: c });
 }
 

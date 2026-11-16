@@ -294,3 +294,6 @@ body.dream button:hover:not(:disabled) { background: #2a2640; }
   .sheet { padding: 124px 16px 16px; }
   .who { left: 50%; margin-left: -52px; }
 }
+
+.chat li.me { background: #fff1b8; }
+.ask p { min-height: 1.6em; }
