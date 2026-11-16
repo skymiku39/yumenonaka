@@ -207,7 +207,7 @@ function render() {
     app.innerHTML = `<section class="sheet title-sheet">
       <div class="duo"><div class="stk">${STK.nami('normal')}</div><div class="stk">${STK.kaoru('laugh')}</div></div>
       <h1>中之夢</h1><p class="sub">Yumenonaka　試玩原型</p>
-      <p class="text">${V.text}</p></section>${buttons()}`;
+      <p class="text">${V.text}</p><p class="ai" id="aiStatus">${AI.on ? AI.status : ''}</p></section>${buttons()}`;
     return;
   }
   if (V.mode === 'dream') {
@@ -224,7 +224,7 @@ function render() {
         <div class="screen"><span class="viewers">${C.viewers} 人正在觀看</span>
           <div class="avatar stk">${BODY.kaoru(V.mood || 'normal')}</div><p class="caption">${V.text}</p></div></div>
         <aside class="chat"><h3>聊天室</h3><ul>${C.chat.slice(-9).map(m => `<li class="${m.c || ''}"><b>${m.n}</b>${m.t}</li>`).join('')}</ul></aside></div>
-      <div class="ask"><p>${V.line}</p>${V.timer ? '<div class="timer"><i id="tbar"></i></div>' : ''}</div>${buttons()}`;
+      <div class="ask"><p>${V.line}</p>${V.timer ? '<div class="timer"><i id="tbar"></i></div>' : ''}</div>${V.onSay ? '<form class="say"><input id="sayText" maxlength="40" autocomplete="off" placeholder="自己打一句留言，由 AI 評分" aria-label="自己打一句留言"><button class="mini-btn">送出</button></form>' : ''}${buttons()}`;
     return;
   }
   const sky = SKY[G.day === 6 && G.slot >= 2 ? 3 : Math.min(G.slot, 3)];
@@ -244,12 +244,93 @@ $('#app').addEventListener('click', e => {
   if (b && !b.disabled) { clearInterval(TM); V.choices[+b.dataset.i].on(); }
 });
 
+$('#app').addEventListener('submit', e => {
+  e.preventDefault();
+  const t = ($('#sayText').value || '').trim();
+  if (!t || !V.onSay) return;
+  clearInterval(TM);
+  V.onSay(t);
+});
+$('#app').addEventListener('focusin', e => { if (e.target.id === 'sayText') clearInterval(TM); });
+
+// ---------- 可選：AI 留言評分（WebLLM，模型在玩家的瀏覽器裡執行） ----------
+const AI = { on: false, mode: '', status: '', engine: null };
+const AI_MODEL = new URLSearchParams(location.search).get('model') || 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'; // 實測 0.5B 幾乎全判成負面，1.5B 才堪用
+const AI_LIB = 'https://esm.run/@mlc-ai/web-llm@0.2.88';
+const esc = t => t.replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+const aiNote = t => { AI.status = t; const el = $('#aiStatus'); if (el) el.textContent = t; };
+
+async function aiToggle() {
+  if (AI.on) { AI.on = false; return title(); }
+  AI.on = true;
+  if (AI.engine) { AI.mode = 'llm'; AI.status = '模型已就緒。'; return title(); }
+  if (!navigator.gpu) { AI.mode = 'rule'; AI.status = '這個瀏覽器不支援 WebGPU，改用簡易規則評分。'; return title(); }
+  AI.mode = 'loading';
+  AI.status = '準備下載模型……（下載期間可以先開始玩，會暫時用簡易規則評分）';
+  title();
+  try {
+    const lib = await import(AI_LIB);
+    AI.engine = await lib.CreateMLCEngine(AI_MODEL, { initProgressCallback: p => aiNote(`下載並載入模型中　${Math.round((p.progress || 0) * 100)}%`) });
+    AI.mode = 'llm';
+    aiNote('模型已就緒。');
+  } catch (e) {
+    AI.mode = 'rule';
+    aiNote('模型載入失敗，改用簡易規則評分。（' + (e && e.message || e) + '）');
+  }
+  if (V.home) title();
+}
+
+const GOOD = ['好聽', '可愛', '喜歡', '加油', '謝謝', '辛苦', '讚', '棒', '療癒', '笑死', '好看', '厲害', '期待', '支持', '愛', '溫柔', '開心', '草安', '晚安', '8888'];
+const BAD = ['爛', '難聽', '無聊', '滾', '醜', '討厭', '吵', '垃圾', '退訂', '不好', '噁', '白痴', '笨', '閉嘴', '難看', '失望', '假'];
+const TOPIC = ['薰草', '直播', '今天', '妳', '你', '台', '草民', '歌', '唱', '遊戲', '玩', '聲音', '朗讀', '聊', '花田', '精靈'];
+
+function ruleScore(t, k) {
+  let tone = 0;
+  for (const w of GOOD) if (t.includes(w)) tone++;
+  for (const w of BAD) if (t.includes(w)) tone--;
+  return { tone: clamp(tone, -2, 2), relevant: TOPIC.concat([ROUTES[k].n]).some(w => t.includes(w)) ? 1 : 0, by: '規則' };
+}
+
+async function aiScore(t, k) {
+  if (AI.mode !== 'llm') return ruleScore(t, k);
+  try {
+    // 小模型不太會照格式寫 JSON，所以用「語氣,相關」兩個數字，並給幾個示範
+    const shot = (q, a) => [{ role: 'user', content: '留言：' + q }, { role: 'assistant', content: a }];
+    const req = AI.engine.chat.completions.create({ temperature: 0, max_tokens: 8, messages: [
+      { role: 'system', content: `你是直播聊天室的留言評分員。現在是虛擬主播「薰草」的${ROUTES[k].n}直播。\n對每則留言回答兩個數字，用逗號分開：語氣,相關\n語氣：-2 惡意攻擊，-1 負面或掃興，0 普通，1 友善，2 非常溫暖。\n相關：和這場直播或主播有關是 1，無關是 0。\n只回答數字。` },
+      ...shot('今天也好療癒，謝謝薰草', '2,1'), ...shot('好吵，不想聽了', '-1,1'), ...shot('有人知道明天天氣嗎', '0,0'),
+      ...shot('加我好友領免費點數', '-1,0'), ...shot('草安～', '1,1'), ...shot('醜死了快下播', '-2,1'),
+      { role: 'user', content: '留言：' + t }] });
+    const res = await Promise.race([req, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), 20000))]);
+    const out = res.choices[0].message.content;
+    AI.lastOut = out;
+    const a = /(-?[0-2])\s*[,，]\s*([01])/.exec(out);
+    if (!a) throw new Error('parse');
+    // 語氣聽模型的；「相關」模型對負面留言常判成無關，所以和詞庫取聯集
+    return { tone: +a[1], relevant: +a[2] || ruleScore(t, k).relevant, by: 'LLM' };
+  } catch (e) {
+    AI.lastErr = String(e && e.message || e);
+    return ruleScore(t, k);
+  }
+}
+
+// 分數對應到固定寫好的反應
+function react(sc) {
+  const label = `${['惡意', '負面', '普通', '友善', '很溫暖'][sc.tone + 2]}・${sc.relevant ? '切題' : '離題'}（${sc.by}）`;
+  if (sc.tone >= 1 && sc.relevant) return { label, mood: 'laugh', stress: -1, reply: sc.tone >= 2 ? '她唸出你的留言，停了一下。「……謝謝，真的。」' : '她唸出你的留言。「謝謝你～」' };
+  if (sc.tone >= 1) return { label, mood: 'laugh', stress: 0, reply: '她唸出你的留言，笑了。「這跟今天沒關係啦。」' };
+  if (sc.tone === 0) return { label, mood: 'normal', stress: 0, reply: sc.relevant ? '她唸出你的留言。「嗯嗯。」' : '你的留言滑過去了，她沒有唸到。' };
+  if (sc.relevant) return { label, mood: 'normal', stress: sc.tone <= -2 ? 2 : 1, reply: '她看到了你的留言，頓了一下。「……我會再加油的。」' };
+  return { label, mood: 'normal', stress: 0, reply: '你的留言被管理員隱藏了。她沒有看到。' };
+}
+
 // ---------- 開場 ----------
 function title() {
   G = null;
   view({ mode: 'title',
     text: '平常，你是 VTuber「薰草」本人，安排自己的一週。\n直播的晚上，你坐進聊天室，當一位草民看她。\n隔天，再回看昨晚的自己。',
-    choices: go('開始', pickSkill, '一季四週，約十分鐘') });
+    home: true, choices: [{ t: '開始', s: '一季四週，約十分鐘', on: pickSkill },
+      { t: `AI 留言評分：${AI.on ? '開' : '關'}`, s: '可選。直播時可以自己打留言，由瀏覽器裡的小型 LLM 評分。首次開啟要下載約 1 GB 以上，需要 WebGPU（電腦版 Chrome 或 Edge）', on: aiToggle }] });
 }
 
 function pickSkill() {
@@ -510,7 +591,21 @@ function turn() {
   c.push({ i: 'coin', t: '打賞（大）', s: '＄4　給太多她會有壓力', on: () => { C.tips += 4; next('「欸、這麼多……謝謝。」她頓了一下。', 'SC ＄4　一直支持妳', 'sc'); } });
   c.push({ i: 'quiet', t: '沉默', s: '只是看著', on: () => next('') });
   view({ mode: 'night', mood: C.mood, title: `${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}`, text: C.cap,
-    line: '你是聊天室裡的一位草民。要做什麼？', choices: c, timer: TIME, timeout: () => next('') });
+    line: '你是聊天室裡的一位草民。要做什麼？', choices: c, timer: TIME, timeout: () => next(''),
+    onSay: AI.on ? freeSay : null });
+  function freeSay(t) {
+    say('你', esc(t), 'me');
+    C.acts++;
+    view({ mode: 'night', mood: C.mood, title: ROUTES[C.k].n, text: C.cap, line: '她正在看留言……', choices: [] });
+    aiScore(t, C.k).then(sc => {
+      const r = react(sc);
+      addStress(r.stress);
+      C.mood = r.mood;
+      say('評分', r.label, 'sys');
+      next(r.reply);
+    });
+  }
+  if (AUTO && AI.on && Math.random() < 0.5) freeSay(pick(['今天的歌好好聽', '好無聊喔', '晚餐吃什麼', '薰草加油', '爛死了', '最喜歡薰草的聲音']));
 }
 
 function endStream(pre) {
@@ -617,6 +712,7 @@ function ending() {
 }
 
 // ---------- 啟動 ----------
+if (location.search.includes('ai=rule')) { AI.on = true; AI.mode = 'rule'; }
 window.addEventListener('error', e => { document.title = 'ERR ' + e.message; });
 title();
 
