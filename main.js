@@ -10,7 +10,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const O = 'stroke="#4a3b33" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"';
 const svg = body => `<svg viewBox="0 0 100 100" aria-hidden="true">${body}</svg>`;
 
-function face(hair, eye, mood, extra) {
+function head(hair, eye, mood, extra) {
   const eyes = mood === 'tired'
     ? `<path d="M35 57h9M56 57h9" ${O} fill="none"/>`
     : mood === 'laugh'
@@ -21,7 +21,7 @@ function face(hair, eye, mood, extra) {
     : mood === 'laugh'
       ? `<path d="M42 66q8 12 16 0z" fill="#e06666" ${O}/>`
       : `<path d="M44 68q6 5 12 0" ${O} fill="none"/>`;
-  return svg(
+  return (
     `<path d="M16 54a34 36 0 0 1 68 0v24q-8 8-12-2H28q-4 10-12 2z" fill="${hair}" ${O}/>` +
     `<circle cx="50" cy="56" r="25" fill="#ffe6d5" ${O}/>` +
     `<path d="M25 52q2-26 25-26t25 26q-12-12-25-9t-25 9z" fill="${hair}" ${O}/>` +
@@ -29,13 +29,20 @@ function face(hair, eye, mood, extra) {
     eyes + mouth + (extra || ''));
 }
 
-const STK = {
-  nami: mood => face('#6b5142', '#3a2a22', mood),
-  kaoru: mood => face('#b79be8', '#7a4fd0', mood,
-    `<g fill="#fff3a6" ${O}><circle cx="24" cy="26" r="5"/><circle cx="32" cy="22" r="5"/><circle cx="30" cy="32" r="5"/></g><circle cx="29" cy="27" r="3" fill="#f6b26b"/>`),
+const FLOWER = `<g fill="#fff3a6" ${O}><circle cx="24" cy="26" r="5"/><circle cx="32" cy="22" r="5"/><circle cx="30" cy="32" r="5"/></g><circle cx="29" cy="27" r="3" fill="#f6b26b"/>`;
+const HEADS = {
+  nami: mood => head('#6b5142', '#3a2a22', mood),
+  kaoru: mood => head('#b79be8', '#7a4fd0', mood, FLOWER),
 };
+const STK = { nami: m => svg(HEADS.nami(m)), kaoru: m => svg(HEADS.kaoru(m)) };
+const CLOTH = { nami: '#f4d58d', kaoru: '#e3d5ff' };
+const BODY = {};
+for (const k of ['nami', 'kaoru']) {
+  BODY[k] = mood => `<svg viewBox="0 0 100 160" aria-hidden="true"><path d="M20 162v-40q0-34 30-34t30 34v40z" fill="${CLOTH[k]}" ${O}/><path d="M40 92q10 12 20 0" fill="none" ${O}/>${HEADS[k](mood)}</svg>`;
+}
 
 const ICON = {
+  cloud: svg(`<path d="M28 70a16 16 0 0 1 2-32a22 22 0 0 1 42 4a14 14 0 0 1 0 28z" fill="#b8b4c4" ${O}/><path d="M40 52l8 8M48 52l-8 8M56 52l8 8M64 52l-8 8" fill="none" ${O}/>`),
   work: svg(`<path d="M38 36v-8h24v8" fill="none" ${O}/><rect x="18" y="36" width="64" height="44" rx="8" fill="#d39a6a" ${O}/><rect x="44" y="52" width="12" height="10" rx="2" fill="#fff3a6" ${O}/>`),
   class: svg(`<path d="M50 28q-16-8-32-4v50q16-4 32 4q16-8 32-4V24q-16-4-32 4z" fill="#8fc1ee" ${O}/><path d="M50 28v50" ${O} fill="none"/>`),
   practice: svg(`<rect x="38" y="14" width="24" height="42" rx="12" fill="#f39a9a" ${O}/><path d="M28 46q0 22 22 22t22-22M50 68v16M38 84h24" fill="none" ${O}/>`),
@@ -114,36 +121,62 @@ function pips(n, max, cls) {
   return `<span class="pips">${h}</span>`;
 }
 
-function hud() {
+const DAYS = ['一', '二', '三', '四', '五', '直播', '回看'];
+const SKY = ['#bfe3ff', '#ffe9b0', '#ffb990', '#3a3170'];
+
+function calendar() {
+  const d = Math.min(G.day, 7);
+  return `<div class="cal"><b>第 ${G.week} 週</b>` +
+    DAYS.map((n, i) => `<span class="d ${i + 1 === d ? 'now' : ''} ${i + 1 < d ? 'past' : ''} ${i === 5 ? 'onair' : ''}">${n}</span>`).join('') +
+    `<span class="slots">今天的時段 ${pips(slots() - G.slot, slots(), 'slot')}</span></div>`;
+}
+
+function status() {
   const s = stage();
-  const chips = Object.keys(ROUTES).map(k => {
+  const tree = Object.keys(ROUTES).map(k => {
     const r = G.r[k];
-    const bar = r.st && r.st < r.cap ? `（練習 ${r.exp}/3）` : '';
-    return `<span class="chip ${r.st ? 'open' : ''}">${ROUTES[k].n}　${ST[r.st]}${bar}</span>`;
+    return `<li class="${r.st ? 'open' : ''}"><span>${ROUTES[k].n}</span><span>${ST[r.st]}${r.st && r.st < r.cap ? ` ${r.exp}/3` : ''}</span></li>`;
   }).join('');
-  return `<div class="hud">
-    <span class="tag">第 ${G.week} 週・第 ${Math.min(G.day, 7)} 天 ${pips(slots() - G.slot, slots(), 'slot')}</span>
-    <span class="tag">心力 ${pips(G.heart, 5, '')}</span>
-    <span class="tag stage${s}">壓力：${STRESS[s]}</span>
-    <span class="tag">錢 ${G.money}</span>
-    <span class="tag">靈感 ${G.insp}/5</span>
-    <span class="tag">學習度 ${G.study}%</span>
-    <span class="tag">草民認得你：${knownName()}</span>
-  </div><div class="skills">${chips}</div>`;
+  return `<aside class="status"><dl>
+    <dt>心力</dt><dd>${pips(G.heart, 5, '')}</dd>
+    <dt>壓力</dt><dd><span class="badge stage${s}">${STRESS[s]}</span></dd>
+    <dt>錢</dt><dd>${G.money}</dd>
+    <dt>靈感</dt><dd>${pips(G.insp, 5, 'insp')}</dd>
+    <dt>學習度</dt><dd><span class="bar"><i style="width:${G.study}%"></i></span></dd>
+    <dt>認得你</dt><dd>${knownName()}</dd>
+  </dl><ul class="tree">${tree}</ul></aside>`;
 }
 
 function render() {
   document.body.className = V.mode;
+  const app = $('#app');
   if (V.mode === 'title') {
-    $('#app').innerHTML = `<section class="sheet title-sheet">
+    app.innerHTML = `<section class="sheet title-sheet">
       <div class="duo"><div class="stk">${STK.nami('normal')}</div><div class="stk">${STK.kaoru('laugh')}</div></div>
       <h1>中之夢</h1><p class="sub">Yumenonaka　試玩原型</p>
       <p class="text">${V.text}</p></section>${buttons()}`;
     return;
   }
-  $('#app').innerHTML = hud() +
-    `<section class="sheet"><div class="who stk">${STK[V.who](V.mood || 'normal')}</div>
-    <h2>${V.title}</h2><p class="text">${V.text}</p></section>` + buttons();
+  if (V.mode === 'dream') {
+    app.innerHTML = `<section class="sheet"><div class="who stk">${STK.kaoru(V.mood || 'normal')}</div>
+      <h2>${V.title}</h2><p class="text">${V.text}</p></section>${buttons()}`;
+    return;
+  }
+  if (V.mode === 'night') {
+    const C = G.cur;
+    app.innerHTML = `<div class="live"><div class="video">
+      <div class="screen"><span class="badge-live">LIVE</span><span class="viewers">${C.viewers} 人正在觀看</span>
+        <div class="avatar stk">${BODY.kaoru(V.mood || 'normal')}</div><p class="caption">${V.line}</p></div>
+      <div class="vtitle"><b>${V.title}</b><span>夢野薰草 ch.</span></div><p class="note">${V.text}</p></div>
+      <aside class="chat"><h3>聊天室</h3><ul>${C.chat.slice(-10).map(m => `<li class="${m.c || ''}"><b>${m.n}</b>${m.t}</li>`).join('')}</ul></aside></div>
+      <p class="you">你是聊天室裡的一位草民。這一段要做什麼？</p>${buttons()}`;
+    return;
+  }
+  const sky = SKY[G.day === 6 && G.slot >= 2 ? 3 : Math.min(G.slot, 3)];
+  app.innerHTML = `<div class="gal">${calendar()}<div class="stage" style="--sky:${sky}">${status()}
+    <div class="room"><div class="window"></div><div class="sprite stk">${BODY.nami(V.mood || 'normal')}</div></div>
+    <div class="cmd"><h3>${V.title}</h3>${buttons()}</div></div>
+    <div class="dialog"><span class="name">奈實</span><p>${V.text}</p></div></div>`;
 }
 
 function buttons() {
@@ -187,9 +220,7 @@ function dayView(msg) {
       act(2, '在店裡站了一個下午。' + x + (Math.random() < 0.2 ? unlockRandom('打工時碰到相關的工作') : '')); } },
     { i: 'class', t: '上課', s: '學校的課，或花錢報名', on: classMenu },
     { i: 'practice', t: '練習', s: '把學會的練到熟', on: practiceMenu },
-    { i: 'idea', t: '找靈感', s: '1 時段・靈感 +1', on: () => {
-      G.insp = clamp(G.insp + 1, 0, 5);
-      act(1, '出門走了一圈，記下幾個想法。' + (Math.random() < 0.25 ? unlockRandom('路上看到有趣的東西') : '')); } },
+    { i: 'idea', t: '找靈感', s: '1 時段・小遊戲・靈感 +1 到 +3', on: ideaIntro },
     { i: 'rest', t: '休息', s: '1 時段・心力 +1・壓力 −1', on: () => {
       G.heart = clamp(G.heart + 1, 0, 5); addStress(-1); G.rested = true;
       act(1, '好好吃了一頓飯，躺了一下。'); } },
@@ -263,6 +294,60 @@ function nextDay() {
   dayView(m);
 }
 
+// ---------- 找靈感小遊戲 ----------
+function ideaIntro() {
+  if (AUTO && !location.search.includes('mini')) return ideaDone(1);
+  view({ mode: 'day', who: 'nami', mood: namiMood(), title: '找靈感', text: '出門走走。\n8 秒內點亮飄上來的燈泡，越多靈感越多。\n灰色的雜念不要點，點到會扣分。', choices: go('出發', ideaGame) });
+}
+
+function ideaGame() {
+  let score = 0;
+  let left = 8;
+  document.body.className = 'mini';
+  $('#app').innerHTML = `<div class="mini-top card"><b>找靈感</b><span>點亮燈泡，避開雜念</span>
+    <span class="right">點子 <span id="mScore">0</span>　剩 <span id="mTime">8</span> 秒</span></div><div class="mini-field" id="field"></div>`;
+  const field = $('#field');
+  const spawn = () => {
+    const good = Math.random() < 0.7;
+    const b = document.createElement('button');
+    b.className = 'bub stk';
+    b.style.left = 4 + rnd(82) + '%';
+    const o = { el: b, y: 0, v: 4 + Math.random() * 3 };
+    b.innerHTML = ICON[good ? 'idea' : 'cloud'];
+    b.setAttribute('aria-label', good ? '靈感' : '雜念');
+    b.onclick = () => { score = Math.max(0, score + (good ? 1 : -1)); $('#mScore').textContent = score; o.y = 9999; };
+    field.appendChild(b);
+    bubs.push(o);
+  };
+  // 用計時器移動泡泡，不靠 CSS 動畫
+  let bubs = [];
+  const mv = setInterval(() => {
+    for (const o of bubs) {
+      o.y += o.v;
+      if (o.y > 520) o.el.remove(); else o.el.style.transform = `translateY(${-o.y}px)`;
+    }
+    bubs = bubs.filter(o => o.y <= 520);
+  }, 30);
+  spawn();
+  const sp = setInterval(spawn, 420);
+  if (location.search.includes('freeze')) return; // 截圖測試用：不倒數
+  const tm = setInterval(() => {
+    left--;
+    $('#mTime').textContent = left;
+    if (left > 0) return;
+    clearInterval(sp);
+    clearInterval(mv);
+    clearInterval(tm);
+    ideaDone(score >= 7 ? 3 : score >= 3 ? 2 : 1, score);
+  }, 1000);
+}
+
+function ideaDone(n, score) {
+  G.insp = clamp(G.insp + n, 0, 5);
+  act(1, (score == null ? '出門走了一圈，記下幾個想法。' : `出門走了一圈，抓到 ${score} 個點子。`) + `靈感 +${n}。` +
+    (Math.random() < 0.25 ? unlockRandom('路上看到有趣的東西') : ''));
+}
+
 // ---------- 直播（夜晚，草民視角） ----------
 function streamMenu() {
   const c = [];
@@ -282,9 +367,13 @@ function startStream(k, big) {
   let used = 0;
   if (big) { G.insp -= 3; used = 2; } else if (G.insp) { G.insp--; used = 1; }
   const x = spend(big ? 3 : ROUTES[k].c);
-  G.cur = { k, big, q: G.r[k].st + G.prep + used - (x ? 1 : 0), seg: 0, max: 3, tips: 0, clips: [], slip: false, ext: false };
+  G.cur = { k, big, q: G.r[k].st + G.prep + used - (x ? 1 : 0), seg: 0, max: 3, tips: 0, clips: [], slip: false, ext: false, chat: [], viewers: 48 + G.known * 4 + rnd(30) };
   segment('你打開了薰草的直播。');
 }
+
+const FANS = ['小穗', '茶泡', '新葉', '路過的草', '夜貓草', '薰衣草田'];
+const AMBIENT = ['草安～', '來了來了', '今天也好療癒', '8888', '坐等', '好耶'];
+const AMBIENT_SLIP = ['笑死', '欸剛剛那個www', '草', '這聲音是誰', '好可愛', '剛剛那是本音嗎'];
 
 function segment(pre) {
   const C = G.cur;
@@ -294,21 +383,28 @@ function segment(pre) {
   const sawSlip = C.slip;
   if (slip) C.slip = true;
   C.clips.push({ k: C.k, real: slip, text: line });
-  const next = m => { C.seg++; C.seg < C.max ? segment(m) : endStream(m); };
-  const c = [{ i: 'chat', t: '留言「草安！」', s: '讓她看到你的 ID', on: () => { G.known++; next('你的留言滑過畫面，她唸了你的 ID。'); } }];
-  if (slip) c.push({ i: 'chat', t: '留言「笑死，好可愛」', s: '回應剛剛那一下', on: () => { G.known++; next('她看到留言，又笑了一下。'); } });
-  if (sawSlip) c.push({ i: 'chat', t: '留言「這不是薰草」', s: '看過她破功才會出現', on: () => { G.known++; addStress(1); next('留言區安靜了一秒。'); } });
+  C.viewers += rnd(7) - 2;
+  for (let i = 0; i < 2 + rnd(2); i++) C.chat.push({ n: pick(FANS), t: pick(slip ? AMBIENT_SLIP : AMBIENT) });
+  const next = (m, mine, cls) => {
+    if (mine) C.chat.push({ n: '你', t: mine, c: cls || 'me' });
+    C.seg++;
+    C.seg < C.max ? segment(m) : endStream(m);
+  };
+  const c = [{ i: 'chat', t: '留言「草安！」', s: '讓她看到你的 ID', on: () => { G.known++; next('她唸了你的 ID。', '草安！'); } }];
+  if (slip) c.push({ i: 'chat', t: '留言「笑死，好可愛」', s: '回應剛剛那一下', on: () => { G.known++; next('她看到你的留言，又笑了一下。', '笑死，好可愛'); } });
+  if (sawSlip) c.push({ i: 'chat', t: '留言「這不是薰草」', s: '看過她破功才會出現', on: () => { G.known++; addStress(1); next('聊天室安靜了一秒。', '這不是薰草'); } });
   const l = locked();
   if (G.known >= 2 && l.length) {
     const w = l[0];
     c.push({ i: 'wish', t: `許願：想看${ROUTES[w].n}`, s: '眼熟以後才能許新企劃', on: () => {
-      G.r[w].st = 1; next(`她唸出你的願望：「${ROUTES[w].n}嗎……我想想喔。」\n★ 解鎖了「${ROUTES[w].n}」企劃（要不要做，由白天的她決定）。`); } });
+      G.r[w].st = 1;
+      next(`她唸出你的願望：「${ROUTES[w].n}嗎……我想想喔。」\n★ 解鎖了「${ROUTES[w].n}」企劃（要不要做，由白天的她決定）。`, `想看${ROUTES[w].n}！`); } });
   }
-  c.push({ i: 'coin', t: '打賞（小）', s: '+1', on: () => { C.tips += 1; next('「謝謝你的 SC～」'); } });
-  c.push({ i: 'coin', t: '打賞（大）', s: '+4・給太多她會有壓力', on: () => { C.tips += 4; next('「欸、這麼多……謝謝。」她頓了一下。'); } });
+  c.push({ i: 'coin', t: '打賞（小）', s: '+1', on: () => { C.tips += 1; next('「謝謝你的 SC～」', 'SC ＄1　辛苦了', 'sc'); } });
+  c.push({ i: 'coin', t: '打賞（大）', s: '+4・給太多她會有壓力', on: () => { C.tips += 4; next('「欸、這麼多……謝謝。」她頓了一下。', 'SC ＄4　一直支持妳', 'sc'); } });
   c.push({ i: 'quiet', t: '沉默', s: '只是看著', on: () => next('你沒有留言，繼續看。') });
   view({ mode: 'night', who: 'kaoru', mood: slip ? 'laugh' : 'normal',
-    title: `直播中：${C.big ? '季末大企劃・' : ''}${R.n}　${SEG[C.seg]}`, text: pre + '\n\n' + line, choices: c });
+    title: `【${C.big ? '季末大企劃・' : ''}${R.n}】${SEG[C.seg]}`, line, text: pre, choices: c });
 }
 
 function endStream(pre) {
@@ -416,6 +512,8 @@ title();
 if (AUTO) {
   const timer = setInterval(() => {
     if (document.title !== '中之夢　試玩原型') return clearInterval(timer);
+    const stop = new URLSearchParams(location.search).get('stop');
+    if (stop && document.body.className === stop && G && G.day >= 2) return clearInterval(timer);
     const b = [...document.querySelectorAll('button[data-i]:not(:disabled)')];
     if (b.length) pick(b).click();
   }, 1);
