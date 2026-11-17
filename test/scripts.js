@@ -10,7 +10,7 @@ const WEEK = [
   ['在家休息', [[1, 3], [2, 3], [3, 3], [4, 3], [5, 2], [6, 0], [6, 1], [7, 1], [7, 3]]],
 ];
 // 分析用：一季下來的統計
-const stats = () => f.contentWindow.eval('JSON.stringify({stat:G.stat,fame:G.fame,kept:G.kept,cut:G.cut,money:G.money,stress:G.stress,study:G.study,exam:G.exam,end:G.end,dir:direction(),season:G.season,tree:G.treeLog,exams:G.examLog,main:mainRoute(),promise:G.promise,r:Object.keys(G.r).map(k=>k+G.r[k].st).join(" ")})');
+const stats = () => f.contentWindow.eval('JSON.stringify({stat:G.stat,fame:G.fame,subs:G.subs,kept:G.kept,cut:G.cut,money:G.money,stress:G.stress,study:G.study,exam:G.exam,end:G.end,dir:direction(),season:G.season,tree:G.treeLog,exams:G.examLog,main:mainRoute(),promise:G.promise,r:Object.keys(G.r).map(k=>k+G.r[k].st).join(" ")})');
 const has = t => btns().some(b => !b.disabled && b.textContent.includes(t));
 // 季初方針：專心第一個能選的路線，放下指定的事
 async function policy(letgo, focus) {
@@ -245,6 +245,12 @@ SCRIPTS.call = async () => {
 SCRIPTS.gear = async () => {
   await begin(); f.contentWindow.eval('G.money = 5000; plan("")'); await click('買新麥克風');
   out(text() + ' money=' + f.contentWindow.eval('G.money') + ' gear=' + f.contentWindow.eval('JSON.stringify(G.gear)'));
+};
+// 結算畫面的「複製這局的紀錄」：要有結算、統計、每週一行
+SCRIPTS.copylog = async () => {
+  await begin(); await advance(() => has('複製這局的紀錄'), 1500); await click('複製這局的紀錄'); await sleep(100);
+  const t = text(); const ls = t.split(String.fromCharCode(10));
+  out(ls.slice(0, 3).join(' / ')); out('每週行數：' + ls.filter(l => /第 \d 週：/.test(l)).length);
 };
 SCRIPTS.title = async () => {};
 SCRIPTS.howto = async () => { await click('怎麼玩'); };

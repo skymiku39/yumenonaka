@@ -208,7 +208,7 @@ function newGame(first, seasons) {
     rested: false, pushed: false, kept: 0, cut: 0, dream: [], clips: [], bigDone: null, cur: null, r: {},
     plan: DAYS.map((_, i) => Array(i === 5 ? 2 : 4).fill(null)), done: [], brush: 'rest:home', show: 'talk', big: false, story: [], asked: [], skip: 0, morning: '', exam: null,
     stat: { push: 0, grey: 0, over: 0, near: 0, stuck: 0, warm: 0, self: 0, guilt: 0, crisis: 0, ask: 0, peak: 0, sc: 0, work: 0, made: 0, due: 0, kept: 0 },
-    gear: {}, polish: 0, fame: 0, focus: first, letgo: null, wk: { study: 0, practice: 0, grey: 0 }, lastGrey: 0, lock: [], deadline: null, crisis: false,
+    gear: {}, polish: 0, fame: 0, subs: 320, focus: first, letgo: null, wk: { study: 0, practice: 0, grey: 0 }, lastGrey: 0, lock: [], deadline: null, crisis: false,
     season: 1, seasons: seasons || 1, makeup: 0, promise: null, resume: false, examLog: [], focusLog: [], offLive: false, called: false, montage: [] };
   for (const k in ROUTES) G.r[k] = { st: 0, exp: 0, kept: 0 };
   G.r.talk.st = 1;
@@ -424,7 +424,7 @@ function topbar() {
     <span class="gauge" data-g="money">${nt(G.money)}</span>
     <span class="gauge" data-g="insp">靈感 ${G.insp}/${INSP.max}</span>
     <span class="gauge" data-g="prep">準備 ${ROUTES[G.show].n} ${G.prep}/2</span>
-    <span class="gauge" data-g="study">學習度 ${G.study}%</span></header>`;
+    ${canStudy() ? `<span class="gauge" data-g="study">學習度 ${G.study}%</span>` : ''}<span class="gauge" data-g="subs">訂閱 ${G.subs}</span></header>`;
 }
 
 function sideInfo() {
@@ -587,7 +587,7 @@ function render() {
     const prog = SEGS.slice(0, C.max).map((n, i) => `<span class="${i === C.seg ? 'now' : i < C.seg ? 'past' : ''}">${n}</span>`).join('');
     const [ch, cm] = SEG_TIME[Math.min(C.seg, 3)];
     app.innerHTML = `<header class="top"><span class="badge-live">LIVE</span>${miniClock(ch, cm, `${ch}:${String(cm).padStart(2, '0')}`, true)}<span class="when"><b>${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}</b></span>
-        <span class="clipn">真心片段 ${C.clips.length}</span><span class="prog">${prog}</span></header>
+        <span class="clipn">訂閱 ${G.subs}</span><span class="clipn">真心片段 ${C.clips.length}</span><span class="prog">${prog}</span></header>
       <div class="live"><div class="video">
         <div class="screen"><span class="viewers">${C.viewers} 人正在觀看</span>
           <div class="avatar stk">${BODY.kaoru(C.mood)}</div><p class="caption">${C.cap}</p></div></div>
@@ -1024,7 +1024,7 @@ function montage(then) {
     }
     if (k === 'rest') { addStress(-3); note = '壓力減輕了不少。'; }
     if (k === 'work') { G.money += 2400; addStress(2); note = `多賺了 ${nt(2400)}。`; }
-    if (k === 'live') { G.money += 1200; G.fame += 2; G.buzz = 1; addStress(1); note = `直播多賺了 ${nt(1200)}，下一場會多一些人來看。`; }
+    if (k === 'live') { G.money += 1200; G.fame += 2; G.buzz = 1; G.subs += 40; addStress(1); note = `直播多賺了 ${nt(1200)}，下一場會多一些人來看。`; }
     if (k === 'study') { G.study = clamp(G.study + 20, 0, 100); G.money -= 450; addStress(1); note = `學習度 +20，講義與車錢 ${nt(450)}。`; }
     G.money += MONTAGE_BASE;
     let bill = MONTAGE_BASE ? `這三週的開銷扣掉生活費，少了 ${nt(-MONTAGE_BASE)}。` : '這三週的開銷，剛好被那段時間的生活費抵掉。';
@@ -1254,7 +1254,7 @@ function startStream() {
   // 剪掉的片段讓回放保持完美，下一場多一些人來看（docs/03 2.13 A3）
   const polish = Math.min(3, G.polish);
   G.cur = { k, big, q: G.r[k].st + G.prep + used - (pushed ? 1 : 0) + (G.gear.mic ? 1 : 0), seg: 0, max: 3, shows: rnd(4), tips: 0, over: false,
-    bonus: G.buzz * 200 + polish * 100, clips: [], chat: [], viewers: 40 + rnd(30) + G.buzz * 15 + polish * 8 + (G.gear.light ? 10 : 0),
+    bonus: G.buzz * 200 + polish * 100, clips: [], chat: [], viewers: 40 + rnd(30) + Math.floor(G.subs / 25) + G.buzz * 15 + polish * 8 + (G.gear.light ? 10 : 0),
     wished: false, cap: '', mood: 'normal', m: null, near: false, polish };
   G.buzz = 0;
   G.polish = 0;
@@ -1429,7 +1429,10 @@ function closing() {
 
 function offAir() {
   const C = G.cur;
-  const gross = C.tips + 200 + C.q * 100 + rnd(5) * 50 + C.bonus; // 你的 SC ＋ 其他草民的
+  const gross = C.tips + 200 + C.q * 100 + rnd(5) * 50 + C.bonus + Math.floor(G.subs / 10); // 你的 SC ＋ 其他草民的（訂閱越多越多）
+  // 這場的觀看人數帶來新的訂閱（docs/03 2.24）
+  const newSubs = Math.floor(C.viewers / 6);
+  G.subs += newSubs;
   const total = Math.round(gross * PAY.cut);
   const n = C.clips.length;
   G.money += total;
@@ -1439,6 +1442,7 @@ function offAir() {
   if (C.over) m += '\n「收了這麼多，下次不能出錯。」';
   m += n ? `\n有 ${n} 段不像薰草、像她自己的片段。明天要決定留不留。` : '\n今晚沒有哪一段脫稿。';
   G.clips = C.clips;
+  G.lastStream = `${C.big ? '大企劃・' : ''}${ROUTES[C.k].n}，觀看 ${C.viewers}，片段 ${n}，SC ${gross}，訂閱 +${newSubs}`;
   if (C.big && G.r[C.k].st >= 3) G.bigDone = C.k;
   G.prep = 0;
   G.show = 'talk';
@@ -1446,7 +1450,7 @@ function offAir() {
   const ext = C.ext;
   G.cur = null;
   const c = ext ? [{ i: 'sleep', t: '直接睡', s: '加長之後沒有力氣做別的事', on: () => nextDay(false) }] : [
-    { i: 'cut', t: '剪輯精華', off: G.week === 4 && G.season === G.seasons, s: G.week === 4 && G.season === G.seasons ? '沒有下一場了' : `下一場多一些人來看，SC 多 ${nt(200)} 左右（抽成前）`, on: () => { G.buzz = 1; nextDay(false); } },
+    { i: 'cut', t: '剪輯精華', off: G.week === 4 && G.season === G.seasons, s: G.week === 4 && G.season === G.seasons ? '沒有下一場了' : `下一場多一些人來看，SC 多 ${nt(200)} 左右（抽成前）`, on: () => { G.buzz = 1; G.subs += 10; nextDay(false); } },
     { i: 'chat', t: '經營社群', s: `靈感 +${INSP.social}`, on: () => { G.insp = clamp(G.insp + INSP.social, 0, INSP.max); nextDay(false); } },
     { i: 'sleep', t: '早點睡', s: '多睡一點，明早多回 1 格心力', on: () => { G.early = true; nextDay(false); } }];
   view({ mode: 'day', mood: namiMood(), sky: 3, title: '下播了', text: m, choices: c });
@@ -1517,6 +1521,8 @@ function weekEnd() {
     } else due = `\n${G.deadline.name}準時交出去了。`;
     G.deadline = null;
   }
+  G.weekLog = (G.weekLog || []).concat([`${seasonLabel(G)}第 ${G.week} 週：壓力 ${STRESS[stage()]}（${G.stress}）　心力 ${G.heart}　錢 ${G.money}　留下 ${G.kept}　剪掉 ${G.cut}　認得 ${FAME[fameOf(G.fame)]}${G.lastStream ? '　直播 ' + G.lastStream : ''}${G.crisis ? '　撐不住的一週' : ''}`]);
+  G.lastStream = '';
   G.lastGrey = G.wk.grey || 0;
   G.wk = { study: 0, practice: 0, grey: 0 };
   const m = `第 ${G.week} 週結束。\n${bill}${due}` + (guilt.length ? `\n睡前她想到：「${guilt.join('，')}。」（壓力上升）` : '') +
@@ -1679,12 +1685,28 @@ function ending() {
     (year ? `期末：${G.examLog.join('、')}。\n` : `期末：${G.exam ? '合格。' : '沒過。下學期有幾週要被補考佔掉。'}\n`) +
     `夢裡的回答：${tally(G.dream)}。\n` +
     `方針紀錄：${policyLog}。蒙太奇：${tally(G.montage) || '（沒有）'}。\n` +
-    `收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。她認得你：${FAME[fameOf(G.fame)]}。\n` +
+    `收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。她認得你：${FAME[fameOf(G.fame)]}。頻道訂閱 ${G.subs}。\n` +
     (G.end ? `結局${G.seasons > 4 ? '' : '（試玩）'}：${G.end}${G.endLine ? '。她說：' + G.endLine : '。她什麼都沒說，照常收播。'}${G.end === '暫停後再規劃' ? (G.savings ? '存款夠，這是有計畫的休息。' : '存款不夠，她回去多排班，頻道先放著。') : ''}\n` : '') +
     (G.cut + (G.held || 0) > G.kept ? '回放裡的薰草一直很完美。' : G.kept ? '有幾段笑聲留在了頻道上。' : `這一${year ? '年' : '季'}沒有特別的片段。`) +
     '\n留下或剪掉，都沒有標準答案。';
   if (AUTO) document.title = 'AUTO-DONE';
-  view({ mode: 'day', mood: G.kept ? 'laugh' : 'normal', sky: 0, title: G.seasons > 4 ? '三年　結算' : year ? '第一年　結算' : '第一季　結算', text: t, choices: [{ t: '再玩一次', on: title }] });
+  G.endText = t;
+  view({ mode: 'day', mood: G.kept ? 'laugh' : 'normal', sky: 0, title: G.seasons > 4 ? '三年　結算' : year ? '第一年　結算' : '第一季　結算', text: t,
+    choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '試玩回饋用：貼給設計者', on: copyLog }] });
+}
+
+// 試玩回饋：把這一局的結算、統計、每週一行的紀錄整理成文字，複製到剪貼簿（game/PLAYTEST.md）
+function copyLog() {
+  const mode = G.seasons > 4 ? '三年' : G.seasons > 1 ? '第一年' : '一季';
+  const lines = [`《中之夢》試玩紀錄　模式：${mode}　${new Date().toLocaleString('zh-TW')}`, '', '【結算】', G.endText, '',
+    '【統計】', JSON.stringify({ stat: G.stat, fame: G.fame, kept: G.kept, cut: G.cut, money: G.money, stress: G.stress, end: G.end, dir: direction(), tree: Object.keys(ROUTES).map(k => ROUTES[k].n + G.r[k].st).join(' ') }), '',
+    '【夢的回答（依序）】', G.dream.join('、'), '',
+    '【每週】', ...(G.weekLog || [])];
+  const text = lines.join('\n');
+  let ok = false;
+  try { navigator.clipboard.writeText(text).then(() => { const e = $('.menu h3'); if (e) e.textContent = '已複製到剪貼簿'; }, () => {}); ok = true; } catch (e) { /* 不能用剪貼簿就請玩家自己選取 */ }
+  view({ mode: 'day', mood: 'normal', sky: 0, title: ok ? '複製中……' : '請自己選取複製', text,
+    choices: [{ t: '← 回到結算', on: () => view({ ...V, title: '結算', text: G.endText, choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '試玩回饋用：貼給設計者', on: copyLog }] }) }] });
 }
 
 // ---------- 啟動 ----------
