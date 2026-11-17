@@ -1,5 +1,6 @@
 'use strict';
-// 《中之夢》試玩原型：一季四週。規則依 docs/03-玩法規格.md，數字都是佔位。
+// 《中之夢》v0.1：一季、第一年、三年各一個頁面（season.html、year.html、three.html），共用這支程式。
+// 規則依 docs/03-玩法規格.md，數字都是佔位。
 
 // 測試用：網址加 seed=數字 會固定亂數，讓同一組操作每次結果相同
 {
@@ -197,7 +198,16 @@ const WEIGH = 5; // 「緊繃」的下限
 const canRise = r => !PACE || (PACE_TREE ? !Object.values(G.r).some(x => x.up === G.season) : r.up !== G.season);
 
 const TEST = (AUTO || location.search.includes('seed=')) && !location.search.includes('forcesave'); // 測試時不讀寫存檔
-const SAVE_KEY = 'yumenonaka-save-v4'; // 欄位改過就換版本，舊存檔不讀
+// 三個長度各自一個頁面，頁面用 window.MODE 指定；存檔也分開，互不覆蓋
+const VERSION = 'v0.1';
+const MODES = {
+  season: { n: '一季', seasons: 1, s: '四週。第一次玩從這裡開始' },
+  year: { n: '第一年', seasons: 4, s: '四季，大四一整年。到畢業為止' },
+  three: { n: '三年', seasons: 12, s: '十二季，完整的三年。第三年最後一場決定結局' },
+};
+const MODE = MODES[window.MODE] ? window.MODE : 'season';
+const M = MODES[MODE];
+const SAVE_KEY = 'yumenonaka-save-v4-' + MODE; // 欄位改過就換版本，舊存檔不讀
 function save(note) {
   if (TEST) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ G: { ...G, cur: null, play: null }, note })); } catch (e) { /* 不能存就算了 */ }
@@ -600,7 +610,7 @@ function render() {
   if (V.mode === 'title') {
     app.innerHTML = `<section class="sheet title-sheet">
       <div class="duo"><div class="stk">${STK.nami('normal')}</div><div class="stk">${STK.kaoru('laugh')}</div></div>
-      <h1>中之夢</h1><p class="sub">Yumenonaka　試玩原型</p>
+      <h1>中之夢</h1><p class="sub">Yumenonaka　${VERSION}・${M.n}</p>
       <p class="text">${V.text}</p><p class="ai" id="aiStatus">${AI.on ? AI.status : ''}</p></section>${buttons()}`;
   } else if (V.mode === 'dream') {
     app.innerHTML = `<section class="sheet"><div class="who stk">${STK.kaoru(V.mood || 'normal')}</div>
@@ -773,9 +783,10 @@ function title() {
   const how = { i: 'idea', t: '怎麼玩', s: '一週的流程和這一季的目標', on: howTo };
   view({ mode: 'title',
     text: '平常，你是 VTuber「薰草」本人奈實，排自己的一週。\n直播的晚上，你坐進聊天室，當一位草民看她。你的留言會影響她怎麼接。\n隔天，再回到奈實，決定昨晚的真心片段要留下還是剪掉。\n進度會自動存在這個瀏覽器裡，下次從最近一次排行程的地方接著玩。',
-    choices: sv ? [{ i: 'live', t: '繼續上次', s: `${seasonLabel(sv.G)}第 ${sv.G.week} 週　${DAYS[sv.G.day - 1]}`, on: () => { G = sv.G; plan(sv.note); } },
-      { i: 'cut', t: '從頭開始：一季', s: '會蓋掉上次的進度', on: () => pickSkill(1) }, { i: 'class', t: '從頭開始：第一年', s: '會蓋掉上次的進度', on: () => pickSkill(4) }, { i: 'wish', t: '從頭開始：三年', s: '會蓋掉上次的進度', on: () => pickSkill(12) }, how]
-      : [{ i: 'live', t: '開始', s: '一季四週', on: () => pickSkill(1) }, { i: 'class', t: '第一年', s: '四季，大四一整年。到畢業為止', on: () => pickSkill(4) }, { i: 'wish', t: '三年', s: '十二季，完整的骨架。第三年最後一場決定結局', on: () => pickSkill(12) }, how] });
+    choices: (sv ? [{ i: 'live', t: '繼續上次', s: `${seasonLabel(sv.G)}第 ${sv.G.week} 週　${DAYS[sv.G.day - 1]}`, on: () => { G = sv.G; plan(sv.note); } },
+      { i: 'cut', t: '從頭開始', s: `${M.n}。會蓋掉上次的進度`, on: () => pickSkill(M.seasons) }]
+      : [{ i: 'live', t: '開始', s: `${M.n}：${M.s}`, on: () => pickSkill(M.seasons) }])
+      .concat([how, { i: 'quiet', t: '換一個長度', s: '回到首頁', on: () => { location.href = 'index.html'; } }]) });
 }
 
 function howTo() {
@@ -785,7 +796,9 @@ function howTo() {
     '③ 直播日：你變成聊天室裡的一位草民。每一段先出現一幕，再輪到你選一件事。用留言接住她，她就會露出自己，多一段真心片段。但她壓力緊繃時，第一次會接不住；撐不住時，誰都接不住。\n' +
     '④ 回看日：回到奈實，決定那些真心片段要留下還是剪掉。留下換的是她自己（③ 風格），剪掉換的是頻道（下一場多一些人來看）。\n' +
     '季初先選方針：專心一條路線、放下一件事。關鍵週之間是三週的蒙太奇，選一個重心帶過。每個關鍵週開頭有一件事（請託、期限、電話等）。\n' +
-    '「第一年」模式有四季：第 2 季末是上學期期末，第 4 季末是畢業結算。\n\n' +
+    ({ season: '這一版只有一季，最後一場直播的那句話決定結局。\n\n',
+      year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算。第 4 季最後一場直播的那句話決定結局。\n\n',
+      three: '這一版有十二季：第一年大四，第二年畢業後，第三年出路與收入。第三年最後一場直播的那句話決定結局。\n\n' })[MODE] +
     '【這一季的目標】\n' +
     '・把一條路線練到「② 上手」（練習 3 次）\n' +
     '・留下 2 段真心片段，長出「③ 風格」（這個不是練出來的）\n' +
@@ -1704,7 +1717,7 @@ function direction() {
   return tied.length === 1 ? tied[0] : of(G.dream[G.dream.length - 1] || '沉默');
 }
 
-// 最後一場直播說的那句話決定結局。完整版在第三年最後一季；原型放在第一季的結算前試規則（docs/03 2.19）
+// 最後一場直播說的那句話決定結局：三年版在第三年最後一季，一季版與第一年版在最後一季的結算前（docs/03 2.19）
 function lastWords() {
   const dir = direction();
   const main = mainRoute();
@@ -1722,8 +1735,8 @@ function lastWords() {
     opt('「我想休息一陣子。」', 0, '暫停後再規劃'),
     { i: 'quiet', t: '照常收播，什麼都沒說', s: '→ 暫停後再規劃（沒有說明的版本）', on: () => { G.end = '暫停後再規劃'; G.endLine = ''; epilogue(0); } }];
   G.savings = savings;
-  view({ mode: 'day', mood: namiMood(), sky: 3, title: G.seasons > 4 ? '最後一場的那句話' : '試玩：最後一場的那句話',
-    text: (G.seasons > 4 ? '第三年的最後一場直播。\n' : `（完整版裡，這是第三年最後一場直播。原型在${G.seasons > 1 ? '第一年' : '這一季'}結束時試結局的規則。）\n`) + `收播前，聊天室還在動。她想說點什麼。\n\n理想中的薰草的方向：${dir}。主要路線：${ROUTES[main].n}（${ST[G.r[main].st]}）。\n笑聲：${LAUGH[laughOf(G.kept)]}，壓力：${STRESS[stage()]}，說得出口的程度 ${lv}。存款：${nt(G.money)}${savings ? '（夠撐三個月）' : '（撐不到三個月）'}。`,
+  view({ mode: 'day', mood: namiMood(), sky: 3, title: '最後一場的那句話',
+    text: (G.seasons > 4 ? '第三年的最後一場直播。\n' : G.seasons > 1 ? '第一年的最後一場直播。\n' : '這一季的最後一場直播。\n') + `收播前，聊天室還在動。她想說點什麼。\n\n理想中的薰草的方向：${dir}。主要路線：${ROUTES[main].n}（${ST[G.r[main].st]}）。\n笑聲：${LAUGH[laughOf(G.kept)]}，壓力：${STRESS[stage()]}，說得出口的程度 ${lv}。存款：${nt(G.money)}${savings ? '（夠撐三個月）' : '（撐不到三個月）'}。`,
     choices: c });
 }
 
@@ -1773,19 +1786,19 @@ function ending() {
     `夢裡的回答：${tally(G.dream)}。\n` +
     `方針紀錄：${policyLog}。蒙太奇：${tally(G.montage) || '（沒有）'}。\n` +
     `收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。她認得你：${FAME[fameOf(G.fame)]}。頻道訂閱 ${G.subs}。\n` +
-    (G.end ? `結局${G.seasons > 4 ? '' : '（試玩）'}：${G.end}${G.endLine ? '。她說：' + G.endLine : '。她什麼都沒說，照常收播。'}${G.end === '暫停後再規劃' ? (G.savings ? '存款夠，這是有計畫的休息。' : '存款不夠，她回去多排班，頻道先放著。') : ''}\n` : '') +
+    (G.end ? `結局：${G.end}${G.endLine ? '。她說：' + G.endLine : '。她什麼都沒說，照常收播。'}${G.end === '暫停後再規劃' ? (G.savings ? '存款夠，這是有計畫的休息。' : '存款不夠，她回去多排班，頻道先放著。') : ''}\n` : '') +
     (G.cut + (G.held || 0) > G.kept ? '回放裡的薰草一直很完美。' : G.kept ? '有幾段笑聲留在了頻道上。' : `這一${year ? '年' : '季'}沒有特別的片段。`) +
     '\n留下或剪掉，都沒有標準答案。';
   if (AUTO) document.title = 'AUTO-DONE';
   G.endText = t;
   view({ mode: 'day', mood: G.kept ? 'laugh' : 'normal', sky: 0, title: G.seasons > 4 ? '三年　結算' : year ? '第一年　結算' : '第一季　結算', text: t,
-    choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '試玩回饋用：貼給設計者', on: copyLog }] });
+    choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '貼給設計者，或自己留著', on: copyLog }] });
 }
 
-// 試玩回饋：把這一局的結算、統計、每週一行的紀錄整理成文字，複製到剪貼簿（game/PLAYTEST.md）
+// 遊玩紀錄：把這一局的結算、統計、每週一行的紀錄整理成文字，複製到剪貼簿（game/PLAYTEST.md）
 function copyLog() {
   const mode = G.seasons > 4 ? '三年' : G.seasons > 1 ? '第一年' : '一季';
-  const lines = [`《中之夢》試玩紀錄　模式：${mode}　${new Date().toLocaleString('zh-TW')}`, '', '【結算】', G.endText, '',
+  const lines = [`《中之夢》${VERSION} 遊玩紀錄　模式：${mode}　${new Date().toLocaleString('zh-TW')}`, '', '【結算】', G.endText, '',
     '【統計】', JSON.stringify({ stat: G.stat, fame: G.fame, kept: G.kept, cut: G.cut, money: G.money, stress: G.stress, end: G.end, dir: direction(), tree: Object.keys(ROUTES).map(k => ROUTES[k].n + G.r[k].st).join(' ') }), '',
     '【夢的回答（依序）】', G.dream.join('、'), '',
     '【每週】', ...(G.weekLog || [])];
@@ -1793,10 +1806,11 @@ function copyLog() {
   let ok = false;
   try { navigator.clipboard.writeText(text).then(() => { const e = $('.menu h3'); if (e) e.textContent = '已複製到剪貼簿'; }, () => {}); ok = true; } catch (e) { /* 不能用剪貼簿就請玩家自己選取 */ }
   view({ mode: 'day', mood: 'normal', sky: 0, title: ok ? '複製中……' : '請自己選取複製', text,
-    choices: [{ t: '← 回到結算', on: () => view({ ...V, title: '結算', text: G.endText, choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '試玩回饋用：貼給設計者', on: copyLog }] }) }] });
+    choices: [{ t: '← 回到結算', on: () => view({ ...V, title: '結算', text: G.endText, choices: [{ t: '再玩一次', on: title }, { i: 'prep', t: '複製這局的紀錄', s: '貼給設計者，或自己留著', on: copyLog }] }) }] });
 }
 
 // ---------- 啟動 ----------
+const BASE_TITLE = document.title;
 window.addEventListener('error', e => { document.title = 'ERR ' + e.message; });
 title();
 if (location.search.includes('ai=rule')) { AI.on = true; AI.mode = 'rule'; aiNote('AI 留言：簡易規則評分。'); }
@@ -1808,7 +1822,7 @@ if (AUTO) {
   const after = +new URLSearchParams(location.search).get('after') || 0;
   let hits = 0;
   const timer = setInterval(() => {
-    if (document.title !== '中之夢　試玩原型') return clearInterval(timer);
+    if (document.title !== BASE_TITLE) return clearInterval(timer);
     if (stop && document.body.className === stop && G && hits++ >= after) return clearInterval(timer);
     if (stop === 'story' && V && V.title && V.title.startsWith('劇情')) return clearInterval(timer);
     const b = [...document.querySelectorAll('button[data-i]:not(:disabled)')];
