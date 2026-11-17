@@ -21,7 +21,7 @@ body {
 body.night { --paper: #1d1838; --card: #f6f1ff; background-image: none; }
 body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image: none; }
 
-#app { max-width: 980px; margin: 0 auto; padding: 14px 14px 40px; }
+#app { max-width: 1180px; margin: 0 auto; padding: 14px 14px 40px; }
 
 /* 貼紙：白邊加一點陰影 */
 .stk svg {
@@ -34,7 +34,7 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
     drop-shadow(0 4px 3px rgba(0, 0, 0, .25));
 }
 
-.top, .menu, .msg, .chat, .panel, .mini-top, .ask {
+.top, .menu, .msg, .chat, .ask, .board, .info {
   background: var(--card);
   border: 3px solid var(--ink);
   border-radius: 16px;
@@ -43,22 +43,27 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
 .pips { display: inline-flex; gap: 3px; vertical-align: middle; }
 .pip { width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 50%; }
 .pip.on { background: var(--warn); }
-.pip.slot { border-radius: 3px; }
-.pip.slot.on { background: #f6c453; }
 .pip.insp.on { background: #ffe27a; }
 .badge { padding: 1px 10px; border: 2px solid var(--ink); border-radius: 999px; font-size: 13px; }
 .stage0 { background: #dff3e0; }
 .stage1 { background: #ffe9b8; }
 .stage2 { background: #ffcfcf; }
-.bar { display: inline-block; width: 90px; height: 12px; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; vertical-align: middle; }
-.bar i { display: block; height: 100%; background: #8fc1ee; }
 
-/* ---------- 上方列：只放最常看的 ---------- */
+/* 滑鼠停在行動上時，對應的數值、時段、日子會閃 */
+@keyframes blink { 0%, 100% { box-shadow: 0 0 0 3px #ffb300; background-color: #ffe9a8; } 50% { box-shadow: 0 0 0 3px transparent; background-color: transparent; } }
+.gauge { padding: 2px 6px; border-radius: 8px; }
+.gauge.blink { animation: blink .7s ease-in-out infinite; }
+.rh.blink, .dh.blink { animation: blink .7s ease-in-out infinite; color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  .gauge.blink, .rh.blink, .dh.blink { animation: none; box-shadow: 0 0 0 3px #ffb300; background-color: #ffe9a8; }
+}
+
+/* ---------- 上方列：所有資源常駐 ---------- */
 .top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 18px;
+  gap: 6px 8px;
   padding: 8px 14px;
   margin-bottom: 12px;
   font-size: 14px;
@@ -78,8 +83,10 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
   box-shadow: 2px 2px 0 var(--ink);
 }
 
-/* ---------- 主畫面：場景＋對話框＋指令 ---------- */
-.main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+/* ---------- 主畫面：左邊內容，右邊指令＋目標＋技能 ---------- */
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; align-items: start; }
+.side { display: grid; gap: 12px; }
+.main > * { min-width: 0; } /* 讓週曆只在自己的框裡橫向捲動，不把整頁撐寬 */
 .scene {
   position: relative;
   min-height: 470px;
@@ -87,37 +94,90 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
   border: 3px solid var(--ink);
   border-radius: 16px;
   box-shadow: 4px 4px 0 var(--ink);
-  background: linear-gradient(#fdf0d8 0 62%, #dcc09a 62% 100%);
+  background-color: #fdf3dc;
+  transition: background-color .6s;
 }
+.floor { position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background-color: #dcc09a; transition: background-color .6s; }
 .window {
   position: absolute;
   top: 24px;
   left: 24px;
-  width: 120px;
-  height: 96px;
+  width: 132px;
+  height: 104px;
+  overflow: hidden;
   border: 4px solid var(--ink);
   border-radius: 10px;
-  background:
-    linear-gradient(var(--ink), var(--ink)) center / 4px 100% no-repeat,
-    linear-gradient(var(--ink), var(--ink)) center / 100% 4px no-repeat,
-    var(--sky, #bfe3ff);
+  background-color: #bfe3ff;
+  transition: background-color .6s;
 }
+.window::before, .window::after { content: ""; position: absolute; z-index: 2; background: var(--ink); }
+.window::before { left: 50%; top: 0; width: 4px; height: 100%; margin-left: -2px; }
+.window::after { top: 50%; left: 0; width: 100%; height: 4px; margin-top: -2px; }
+.orb { position: absolute; top: 12px; left: 14px; width: 30px; height: 30px; border-radius: 50%; background: #ffd45e; box-shadow: 0 0 0 6px rgba(255, 212, 94, .35); transition: top .6s, left .6s, background-color .6s, box-shadow .6s; }
+.stars { position: absolute; inset: 0; opacity: 0; transition: opacity .6s;
+  background-image: radial-gradient(#fff 1.2px, transparent 1.5px), radial-gradient(#fff 1px, transparent 1.3px);
+  background-size: 34px 30px, 23px 27px; background-position: 6px 8px, 15px 20px; }
+/* 窗外照進來的光 */
+.beam { position: absolute; top: 24px; left: 150px; width: 300px; height: 300px; opacity: .55; transition: opacity .6s, background-color .6s;
+  background-color: #fff3b0; clip-path: polygon(0 0, 8% 0, 100% 100%, 40% 100%); }
+/* 立燈：晚上才亮 */
+.lamp { position: absolute; top: 150px; left: 330px; width: 54px; height: 30px; background: #c9c2bb; border: 3px solid var(--ink); border-radius: 24px 24px 4px 4px; transition: background-color .6s; }
+.lamp::after { content: ""; position: absolute; top: 27px; left: 50%; width: 4px; height: 200px; margin-left: -2px; background: var(--ink); }
+.glow { position: absolute; top: -130px; left: -150px; width: 350px; height: 350px; border-radius: 50%; opacity: 0; pointer-events: none; transition: opacity .6s;
+  background: radial-gradient(circle, rgba(255, 226, 122, .7) 0, rgba(255, 226, 122, .25) 40%, transparent 70%); }
+
+/* 牆上的時鐘：指針跟著時段走 */
+.clock { position: absolute; top: 30px; left: 186px; z-index: 1; width: 62px; height: 62px; background: #fff; border: 4px solid var(--ink); border-radius: 50%; }
+.clock::after { position: absolute; top: 62px; left: 50%; width: 110px; margin-left: -55px; padding-top: 4px; text-align: center; font-size: 13px; font-weight: 700; content: "上午 9:00"; }
+.clock i { position: absolute; left: 50%; bottom: 50%; width: 4px; margin-left: -2px; background: var(--ink); border-radius: 2px; transform-origin: 50% 100%; transition: transform .6s; }
+.clock .hh { height: 15px; transform: rotate(270deg); }
+.clock .mm { height: 22px; width: 3px; margin-left: -1.5px; }
+.scene.t1 .clock .hh { transform: rotate(420deg); }
+.scene.t1 .clock::after { content: "下午 14:00"; }
+.scene.t2 .clock .hh { transform: rotate(540deg); }
+.scene.t2 .clock::after { content: "傍晚 18:00"; }
+.scene.t3 .clock .hh { transform: rotate(660deg); }
+.scene.t3 .clock::after { content: "晚上 22:00"; color: #fff; }
+/* 上午 */
+.scene.t0 .orb { top: 12px; left: 14px; }
+/* 下午 */
+.scene.t1 { background-color: #fde6b8; }
+.scene.t1 .floor { background-color: #d6b383; }
+.scene.t1 .window { background-color: #9fd4ff; }
+.scene.t1 .orb { top: 8px; left: 84px; }
+.scene.t1 .beam { opacity: .4; }
+/* 傍晚 */
+.scene.t2 { background-color: #f3b98c; }
+.scene.t2 .floor { background-color: #b98a66; }
+.scene.t2 .window { background-color: #ff9a76; }
+.scene.t2 .orb { top: 62px; left: 88px; background: #ff7043; box-shadow: 0 0 0 8px rgba(255, 112, 67, .35); }
+.scene.t2 .beam { opacity: .3; background-color: #ffb07a; }
+/* 晚上 */
+.scene.t3 { background-color: #37315a; }
+.scene.t3 .floor { background-color: #231e3c; }
+.scene.t3 .window { background-color: #14102e; }
+.scene.t3 .orb { top: 12px; left: 78px; background: #fff6c9; box-shadow: inset -9px -3px 0 #d9cfa0, 0 0 0 5px rgba(255, 246, 201, .2); }
+.scene.t3 .stars { opacity: 1; }
+.scene.t3 .beam { opacity: 0; }
+.scene.t3 .lamp { background: #ffe27a; }
+.scene.t3 .glow { opacity: 1; }
+.scene.t3 .sprite { filter: brightness(.86); }
 .sprite {
   position: absolute;
-  bottom: 70px;
-  left: 50%;
-  height: 78%;
+  top: 16px;
+  right: 24px;
+  height: 200px;
   aspect-ratio: 100 / 160;
-  transform: translateX(-50%);
+  transition: filter .6s;
 }
 .msg {
   position: absolute;
   left: 12px;
   right: 12px;
   bottom: 12px;
-  min-height: 112px;
+  min-height: 230px;
   padding: 22px 18px 12px;
-  background: rgba(255, 255, 255, .96);
+  background: #fff;
 }
 .msg .name {
   position: absolute;
@@ -129,44 +189,131 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
   border: 3px solid var(--ink);
   border-radius: 999px;
 }
-.msg p { margin: 0; line-height: 1.7; white-space: pre-line; }
+.msg p { margin: 0; max-height: 300px; overflow-y: auto; line-height: 1.7; white-space: pre-line; } /* 長的結算文字在框裡捲動，不蓋到房間 */
 
-.menu { padding: 12px; box-shadow: 4px 4px 0 var(--ink); }
+/* 右邊的按鈕直接貼齊欄位，不再包一層框 */
+.menu { padding: 0; background: none; border: none; border-radius: 0; }
 .menu h3 { margin: 0 0 10px; font-size: 16px; }
 .menu .choices { grid-template-columns: 1fr; gap: 10px; margin: 0; }
 
-/* ---------- 狀態面板（收起來的詳細資訊） ---------- */
-.modal {
-  position: fixed;
-  inset: 0;
-  z-index: 5;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 24px 12px;
-  overflow: auto;
-  background: rgba(40, 30, 24, .5);
-}
-.panel { width: 100%; max-width: 520px; padding: 16px 18px; box-shadow: 5px 5px 0 var(--ink); }
-.panel h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 4px; font-size: 20px; }
-.panel h3 { margin: 16px 0 8px; font-size: 14px; color: var(--accent-deep); }
-.panel dl { display: grid; grid-template-columns: 84px 1fr; gap: 8px 10px; margin: 0; font-size: 14px; align-items: center; }
-.panel dt { font-weight: 700; }
-.panel dd { margin: 0; }
-.cal { display: flex; flex-wrap: wrap; gap: 6px; }
-.cal .d { min-width: 36px; padding: 3px 8px; text-align: center; font-size: 14px; border: 2px solid var(--ink); border-radius: 10px; }
-.cal .d.past { opacity: .4; }
-.cal .d.onair { background: #e7dcff; }
-.cal .d.now { background: #ffd45e; font-weight: 700; }
-.tree { list-style: none; margin: 0; padding: 0; }
-.tree li { display: flex; flex-direction: column; padding: 6px 0; border-top: 2px dashed #d8cfc6; opacity: .55; }
+.info { padding: 10px 14px 12px; }
+.info h3 { margin: 6px 0 6px; font-size: 14px; color: var(--accent-deep); }
+.goals, .tree { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+.goals li { padding: 2px 0; line-height: 1.5; white-space: nowrap; }
+.goals li.ok { color: #3f8a4b; font-weight: 700; }
+.tree li { display: flex; flex-direction: column; padding: 5px 0; border-top: 2px dashed #d8cfc6; opacity: .55; }
 .tree li.open { opacity: 1; }
-.tree small { font-size: 12px; opacity: .8; }
+.tree small { font-size: 12px; opacity: .8; white-space: nowrap; }
+
+/* ---------- 週曆排程 ---------- */
+.board { padding: 12px; box-shadow: 4px 4px 0 var(--ink); }
+.note { display: flex; gap: 12px; align-items: center; }
+.note .face { flex: none; width: 44px; height: 44px; }
+.note p { margin: 0; line-height: 1.6; white-space: pre-line; }
+.grid { display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dh, .rh { align-self: center; text-align: center; font-size: 13px; font-weight: 700; }
+.dh { padding: 3px 0; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.dh.now { background: #ffd45e; }
+.dh.past { opacity: .45; }
+.cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-height: 52px;
+  padding: 2px;
+  font-size: 12.5px;
+  text-align: center;
+  border-width: 2px;
+  border-radius: 10px;
+  box-shadow: none;
+}
+.cell .stk { width: 24px; height: 24px; }
+.cell b { font-size: 12.5px; }
+.cell em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #c62828; }
+.cell.empty { border-style: dashed; background: transparent; opacity: .7; }
+.cell.empty b { font-size: 18px; font-weight: 400; }
+.cell.bad { background: #ffe9e6; border-color: #c62828; }
+.cell.past { opacity: .45; }
+.onair {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px;
+  text-align: center;
+  background: #e7dcff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+}
+.onair small { font-size: 11.5px; line-height: 1.5; }
+.tip { margin: 12px 0 0; font-size: 13px; opacity: .8; }
+.dh i { display: block; font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--accent-deep); }
+.cell.no { opacity: .3; }
+/* 週曆的時段：越晚越暗 */
+.rh { padding: 4px 0; border-radius: 8px; line-height: 1.3; }
+.rh small { display: block; font-size: 10.5px; font-weight: 400; opacity: .8; }
+.rh.t0 { background: #d6ecff; }
+.rh.t1 { background: #fff0c2; }
+.rh.t2 { background: #ffd2b0; }
+.rh.t3 { background: #37315a; color: #fff; }
+.cell.t3 { background-color: #e6e3f3; }
+.cell.t3.empty { background-color: #eeecf7; }
+.cell.t3.bad { background-color: #ffe9e6; }
+.info h3 .mini-btn { float: right; min-height: 26px; padding: 0 10px; font-size: 12px; }
+.nodes { float: right; display: inline-flex; gap: 3px; }
+.node { padding: 0 3px; border-radius: 6px; opacity: .3; }
+.node.on { opacity: 1; background: #d9cdfa; }
+.node.next { opacity: 1; background: #ffd45e; }
+
+/* ---------- 技能樹視窗 ---------- */
+.modal { position: fixed; inset: 0; z-index: 5; display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow: auto; background: rgba(40, 30, 24, .5); }
+.panel { width: 100%; max-width: 860px; padding: 16px 18px; background: var(--card); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 5px 5px 0 var(--ink); }
+.panel h2 { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; font-size: 20px; }
+.branches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.branch h4 { margin: 0 0 6px; text-align: center; font-size: 15px; }
+.tnode { display: flex; flex-direction: column; gap: 2px; min-height: 66px; padding: 6px 8px; margin-bottom: 8px; border: 2px dashed var(--ink); border-radius: 12px; opacity: .5; }
+.tnode b { font-size: 14px; }
+.tnode small { font-size: 12px; line-height: 1.4; }
+.tnode.on { opacity: 1; border-style: solid; background: #e7dcff; }
+.tnode.next { opacity: 1; border-style: solid; background: #fff6d6; }
+.tnode.base { min-height: 0; text-align: center; }
+
+.step { margin: 12px 0 8px; font-size: 16px; }
+.step small { margin-left: 10px; font-size: 12.5px; font-weight: 400; opacity: .8; }
+.gridwrap { margin-top: 10px; }
+.bigrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0 0; }
+.bigrow small { font-size: 12.5px; opacity: .85; }
+.goals.wrap li { white-space: normal; padding: 3px 0 3px 14px; text-indent: -14px; }
+.goals.wrap li::before { content: "・"; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 10px 0 0; font-size: 12.5px; }
+.tools span { opacity: .75; }
+.tools .mini-btn { min-height: 30px; font-size: 13px; background: #fff; }
+.dh[data-act] { cursor: pointer; }
+.dh[data-act]:hover { background: #fff6d6; }
+/* 行動小卡：一排排開，說明集中在下面一行 */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 3px 14px 3px 6px; font-weight: 700; font-size: 15px; border-radius: 999px; box-shadow: 2px 2px 0 var(--ink); }
+.chip .stk { width: 30px; height: 30px; }
+.chip.on, .chip.on:hover:not(:disabled) { background: #ffd45e; }
+.desc { margin: 8px 0 10px; padding: 5px 12px; min-height: 2em; font-size: 13.5px; line-height: 1.6; background: #fff6d6; border-radius: 10px; }
+.desc b { margin-right: 12px; }
+.onair em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #c62828; }
+.palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.brush { min-height: 50px; padding: 6px 10px; grid-template-columns: 34px 1fr; column-gap: 8px; box-shadow: 2px 2px 0 var(--ink); }
+.brush .ic { width: 34px; height: 34px; }
+.brush b { font-size: 14.5px; }
+.brush small { font-size: 11.5px; }
+.brush.on { background: #ffd45e; }
+.brush.on:hover:not(:disabled) { background: #ffd45e; }
 
 /* ---------- 直播間 ---------- */
 body.night .top { box-shadow: none; }
 .badge-live { padding: 2px 10px; font-size: 13px; font-weight: 700; color: #fff; background: #e53935; border-radius: 6px; }
 .prog { display: inline-flex; gap: 4px; }
+.clipn { padding: 1px 10px; font-size: 12.5px; font-weight: 700; background: #ffcfe0; border: 2px solid var(--ink); border-radius: 999px; }
 .prog span { padding: 1px 10px; font-size: 12px; border: 2px solid var(--ink); border-radius: 999px; opacity: .45; }
 .prog span.past { opacity: 1; background: #d9cdfa; }
 .prog span.now { opacity: 1; background: #ffd45e; font-weight: 700; }
@@ -174,7 +321,7 @@ body.night .top { box-shadow: none; }
 .live { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; }
 .screen {
   position: relative;
-  aspect-ratio: 16 / 9;
+  height: 340px;
   overflow: hidden;
   border: 3px solid #0e0b1f;
   border-radius: 14px;
@@ -203,14 +350,13 @@ body.night .top { box-shadow: none; }
 .chat ul { display: flex; flex-direction: column; justify-content: flex-end; flex: 1; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
 .chat li { padding: 3px 8px; border-radius: 8px; }
 .chat li b { margin-right: 6px; color: var(--accent-deep); }
-.chat li.hl { background: #fff1b8; }
+.chat li.hl, .chat li.me { background: #fff1b8; }
 .chat li.sc { background: #ffcfe0; border: 2px solid var(--ink); font-weight: 700; }
+.chat li.sys { font-size: 12px; opacity: .7; }
 
 .ask { margin-top: 12px; padding: 10px 14px; }
-.ask p { margin: 0; font-weight: 700; line-height: 1.6; }
-.timer { height: 10px; margin-top: 8px; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; }
-.timer i { display: block; width: 100%; height: 100%; background: #e57373; transition: width .1s linear; }
-body.night .choices { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 12px; }
+.ask p { margin: 0; min-height: 1.6em; font-weight: 700; line-height: 1.6; }
+body.night .choices { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
 
 /* ---------- 標題、夢 ---------- */
 .sheet {
@@ -229,6 +375,7 @@ body.dream .sheet { margin-top: 12vh; border-color: #3a3557; box-shadow: none; }
 .sheet h2 { margin: 0 0 8px; font-size: 18px; }
 .sheet .text { margin: 0; line-height: 1.8; white-space: pre-line; }
 .title-sheet { padding: 28px 20px; text-align: center; }
+.title-sheet .text { display: inline-block; max-width: 620px; text-align: left; }
 .title-sheet h1 { margin: 8px 0 4px; font-size: 34px; letter-spacing: 4px; }
 .title-sheet .sub { margin: 0 0 4px; color: var(--accent-deep); }
 .title-sheet .duo { display: flex; justify-content: center; gap: 12px; }
@@ -236,6 +383,7 @@ body.dream .sheet { margin-top: 12vh; border-color: #3a3557; box-shadow: none; }
 .title-sheet .duo .stk:first-child { transform: rotate(-6deg); }
 .title-sheet .duo .stk:last-child { transform: rotate(6deg); }
 body.title .choices, body.dream .choices { max-width: 720px; margin-left: auto; margin-right: auto; }
+.ai { min-height: 1.5em; margin: 10px 0 0; font-size: 13px; color: var(--accent-deep); }
 
 /* ---------- 按鈕：一律夠大、位置固定 ---------- */
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
@@ -264,13 +412,14 @@ button b { font-size: 16px; }
 button small { grid-column: 2; font-size: 12.5px; line-height: 1.4; opacity: .85; }
 button.plain { grid-template-columns: 1fr; }
 button.plain small { grid-column: 1; }
-button.struck b { text-decoration: line-through; }
 body.night button { box-shadow: 3px 3px 0 #0e0b1f; }
 body.dream button { box-shadow: none; border-color: #3a3557; }
 body.dream button:hover:not(:disabled) { background: #2a2640; }
+button.cell, button.cell:active:not(:disabled) { box-shadow: none; transform: none; }
+button.cell { display: flex; }
 
 /* ---------- 找靈感小遊戲 ---------- */
-.mini-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px; margin-bottom: 12px; }
+.mini-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px; margin-bottom: 12px; background: var(--card); border: 3px solid var(--ink); border-radius: 16px; }
 .mini-top b { font-size: 18px; }
 .mini-top .right { margin-left: auto; font-weight: 700; }
 .mini-field {
@@ -286,22 +435,35 @@ body.dream button:hover:not(:disabled) { background: #2a2640; }
 .bub:hover:not(:disabled) { background: none; }
 .bub:active:not(:disabled) { box-shadow: none; }
 
-@media (max-width: 800px) {
-  .main, .live { grid-template-columns: 1fr; }
-  .scene { min-height: 380px; }
-  .menu .choices { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .chat ul { min-height: 120px; }
-  .sheet { padding: 124px 16px 16px; }
-  .who { left: 50%; margin-left: -52px; }
-}
-
-.chat li.me { background: #fff1b8; }
-.ask p { min-height: 1.6em; }
-
 /* ---------- 可選：AI 留言 ---------- */
 .say { display: flex; gap: 8px; margin-top: 12px; }
 .say input { flex: 1; min-width: 0; min-height: 48px; padding: 8px 14px; font: inherit; color: var(--ink); background: #fff; border: 3px solid #0e0b1f; border-radius: 14px; }
 .say input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .say .mini-btn { min-height: 48px; }
-.chat li.sys { font-size: 12px; opacity: .7; }
-.ai { min-height: 1.5em; margin: 10px 0 0; font-size: 13px; color: var(--accent-deep); }
+
+@media (max-width: 860px) {
+  .branches { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .main, .live { grid-template-columns: 1fr; }
+  .gridwrap { overflow-x: auto; padding-bottom: 4px; }
+  .grid { min-width: 600px; }
+  .chat ul { min-height: 120px; }
+  .sprite { top: 12px; right: 8px; height: 150px; }
+  .lamp { top: 120px; left: 240px; }
+  body.night .choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sheet { padding: 124px 16px 16px; }
+  .who { left: 50%; margin-left: -52px; }
+}
+
+/* 說不出口的選項：照樣列出來，但劃掉（docs/03 2.14） */
+.choices button.struck b { text-decoration: line-through; text-decoration-thickness: 2px; }
+.choices button.struck small { font-style: italic; }
+
+/* 小時鐘：排行程與直播畫面（4.16 第 10 項） */
+.mclock { display: inline-flex; flex: none; align-items: center; gap: 6px; margin-left: auto; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.mclock .face { position: relative; flex: none; width: 28px; height: 28px; background: #fff; border: 3px solid var(--ink); border-radius: 50%; }
+.mclock i { position: absolute; left: 50%; bottom: 50%; width: 3px; margin-left: -1.5px; background: var(--ink); border-radius: 2px; transform-origin: 50% 100%; }
+.mclock .hh { height: 7px; }
+.mclock .mm { width: 2px; height: 10px; margin-left: -1px; }
+.mclock.night { margin-left: 0; }
+.mclock.night .face { background: #37315a; border-color: #37315a; box-shadow: 0 0 0 2px #fff3a6; }
+.mclock.night i { background: #fff3a6; }
