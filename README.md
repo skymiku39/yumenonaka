@@ -6,7 +6,9 @@
 
 ## 怎麼玩
 
-用瀏覽器打開 `index.html` 就可以，不需要安裝任何東西，也不需要伺服器。
+線上版：<https://skymiku39.github.io/yumenonaka/>（GitHub Pages，`main` 分支更新後幾分鐘內跟著更新）。
+
+本機：用瀏覽器打開 `index.html` 就可以，不需要安裝任何東西，也不需要伺服器。
 
 一週的流程：
 
@@ -104,6 +106,16 @@
 帶 `auto` 或 `seed` 時不會讀寫、也不會清除存檔（再加 `forcesave` 可以強制開啟，測存檔用）。
 
 ## 操作測試
+
+**一次跑全部**：`test/run.py` 會自己開本機伺服器、用無頭模式的 Chrome（或 Edge）跑 `test/scripts.js` 的每一支腳本，最後列出失敗的。只用 Python 標準函式庫。
+
+```powershell
+python "D:\github\薰草\game\test\run.py"
+```
+
+預設不跑三年的腳本（`z` 開頭，一支要幾分鐘）；加 `--all` 一起跑，或在後面寫腳本名稱只跑那幾支，例如 `python "D:\github\薰草\game\test\run.py" full mix`。有失敗時結束代碼是 1。找不到瀏覽器時，用環境變數 `CHROME` 指定執行檔路徑。
+
+**在瀏覽器裡看一支腳本跑**：線上版直接打開 <https://skymiku39.github.io/yumenonaka/test/harness.html?s=full>（`s` 換成腳本名稱）。本機的話，瀏覽器不允許本機檔案互相讀取，要先開一個本機伺服器，步驟在下面。
 
 `test/harness.html` 會把遊戲放進一個框裡，照 `test/scripts.js` 的腳本一步一步點按鈕，最後把畫面文字和遊戲狀態印在下方。和 `auto` 的亂點不同，腳本是固定的，適合在改規則之後確認「照目標玩還能不能玩完一季」。
 
