@@ -48,7 +48,7 @@ async function advance(stop, max = 400) {
       const go = btns().find(b => b.dataset.i === '0');
       go.click(); await sleep(30); continue;
     }
-    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '知道了', '多練習', '「最近有點累。」', '「都很好啊。」', '入睡', '「那也是我。」', '說出感受', '照理想做', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播'];
+    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '知道了', '多練習', '「最近有點累。」', '「都很好啊。」', '入睡', '「那也是我。」', '說出感受', '照理想做', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '看結算'];
     if (has('再玩一次')) return false;
     let done = false;
     for (const t of order) if (has(t)) { await click(t); done = true; break; }
@@ -111,7 +111,7 @@ SCRIPTS.fillday = async () => {
 
 // ---- 不同玩法 ----
 const BASE = ['再玩一次', '開播', '繼續 ▶'];
-const TAIL = ['下一季', '報名', '「好，我試試看。」', '「……好的。」', '留下其中一段', '「我在做自己的事。」', '「我想先把自己的事做好。」', '「恭喜！」', '「其實我有在直播。」', '「這週有事，下次！」', '算了', '關掉資料夾', '「好啊！」', '「好的。」', '「這週真的排不出來。」', '「好。」', '「好，一起。」', '「我有在準備了。」', '「我有在做自己的事。」', '「恭喜！我還在找。」', '這週就播', '知道了', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '沉默', '照理想做'];
+const TAIL = ['看結算', '下一季', '報名', '「好，我試試看。」', '「……好的。」', '留下其中一段', '「我在做自己的事。」', '「我想先把自己的事做好。」', '「恭喜！」', '「其實我有在直播。」', '「這週有事，下次！」', '算了', '關掉資料夾', '「好啊！」', '「好的。」', '「這週真的排不出來。」', '「好。」', '「好，一起。」', '「我有在準備了。」', '「我有在做自己的事。」', '「恭喜！我還在找。」', '這週就播', '知道了', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '沉默', '照理想做'];
 async function play(o) {
   await click(o.three ? '三年' : o.year ? '第一年' : '開始'); await click(o.skill || '歌回'); await policy(o.letgo, o.skill);
   let lastWeek = 0;
@@ -251,6 +251,27 @@ SCRIPTS.copylog = async () => {
   await begin(); await advance(() => has('複製這局的紀錄'), 1500); await click('複製這局的紀錄'); await sleep(100);
   const t = text(); const ls = t.split(String.fromCharCode(10));
   out(ls.slice(0, 3).join(' / ')); out('每週行數：' + ls.filter(l => /第 \d 週：/.test(l)).length);
+};
+// 尾聲：結局之後的四張卡，依序印出來
+const epi = async () => {
+  for (let k = 0; k < 4; k++) {
+    const h = (d.querySelector('.menu h3') || {}).textContent;
+    out(h + '｜' + text().split(String.fromCharCode(10)).join(' / '));
+    await click(k < 3 ? '繼續 ▶' : '看結算');
+  }
+};
+const atEpi = () => ((d.querySelector('.menu h3') || {}).textContent || '').startsWith('尾聲');
+SCRIPTS.epilogue = async () => { await begin(); await advance(atEpi, 1500); await epi(); };
+SCRIPTS.epicut = async () => { await begin(); f.contentWindow.eval('void 0'); await advance(() => has('剪掉') || atEpi(), 1500);
+  while (!atEpi()) { if (has('剪掉')) await click('剪掉'); else await advance(() => has('剪掉') || atEpi(), 1500); }
+  await epi(); };
+// 混合企劃：兩條路線到 ② 才能勾；這場的片段留下時兩條都算
+SCRIPTS.mix = async () => {
+  await begin(); f.contentWindow.eval('G.r.talk.st = 2; G.r.sing.st = 2; plan("")');
+  await click('歌回'); await click('做成混合企劃'); out(text()); await click('開始這一週');
+  await advance(() => d.body.className === 'night' && has('沉默')); out('直播標題：' + d.querySelector('.top .when').textContent);
+  await advance(() => has('剪掉')); out('留下的小字：' + btns()[0].textContent);
+  const before = f.contentWindow.eval('G.r.talk.kept'); await click('留下'); out('雜談 kept：' + before + ' → ' + f.contentWindow.eval('G.r.talk.kept'));
 };
 SCRIPTS.title = async () => {};
 SCRIPTS.howto = async () => { await click('怎麼玩'); };

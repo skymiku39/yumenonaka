@@ -76,6 +76,10 @@
 | 第二、三年的事件、工作坊、剪掉的資料夾 | `EVENTS` 的 5-1 之後、`workshop()`、`news()`、`digFolder()` |
 | 頻道規模（訂閱數） | `G.subs`：`startStream()` 的觀看人數、`offAir()` 的 SC 與新訂閱 |
 | 試玩紀錄 | `copyLog()`、`G.weekLog` |
+| 結局的尾聲、收藏冊 | `epilogue()`、`G.album` |
+| 夢的開場、這一季發生過的事 | `dreamLine()`、`flag()`、`G.sf` |
+| 下播後三十秒的開頭 | `offAir()` 的 `after` |
+| 混合企劃 | `partner()`、`showCost()`、`G.mix` |
 | 常客記得上次的回放、「這不是薰草」 | `startStream()` 裡的 `G.rv`、`resolve()` 裡的 `notKaoru` |
 
 ## 測試用的網址參數
@@ -139,5 +143,7 @@ python -m http.server 8000
 | `call` | 沒留下過片段時，家人電話的「最近有點累」「其實我有在直播」都被劃掉 |
 | `gear` | 買新麥克風：錢扣掉、設備記下來 |
 | `copylog` | 結算的「複製這局的紀錄」：有結算、統計、每週一行 |
+| `epilogue`、`epicut` | 結局後的四張尾聲卡（留下的玩家、剪掉的玩家） |
+| `mix` | 混合企劃：能勾、直播標題、留下時兩條路線都算 |
 
 其他網址參數：`seed`（亂數種子，預設 7）、`w`、`h`（遊戲視窗的寬高）、`extra`（要多帶給遊戲的參數）。
