@@ -10,7 +10,7 @@ const WEEK = [
   ['在家休息', [[1, 3], [2, 3], [3, 3], [4, 3], [5, 2], [6, 0], [6, 1], [7, 1], [7, 3]]],
 ];
 // 分析用：一季下來的統計
-const stats = () => f.contentWindow.eval('JSON.stringify({stat:G.stat,fame:G.fame,kept:G.kept,cut:G.cut,money:G.money,stress:G.stress,study:G.study,exam:G.exam,end:G.end,dir:direction(),r:Object.keys(G.r).map(k=>k+G.r[k].st).join(" ")})');
+const stats = () => f.contentWindow.eval('JSON.stringify({stat:G.stat,fame:G.fame,kept:G.kept,cut:G.cut,money:G.money,stress:G.stress,study:G.study,exam:G.exam,end:G.end,dir:direction(),season:G.season,tree:G.treeLog,exams:G.examLog,main:mainRoute(),promise:G.promise,r:Object.keys(G.r).map(k=>k+G.r[k].st).join(" ")})');
 const has = t => btns().some(b => !b.disabled && b.textContent.includes(t));
 // 季初方針：專心第一個能選的路線，放下指定的事
 async function policy(letgo, focus) {
@@ -19,7 +19,7 @@ async function policy(letgo, focus) {
   if (b) { b.click(); await sleep(30); }
   await click(letgo || '放下：練習');
   // 第 1 週的事件：店長問能不能代班。照目標玩的人拒絕，說不出口時只好答應
-  await click(has('「這週不太方便……」') ? '「這週不太方便……」' : '「好，沒問題。」');
+  if (has('「這週不太方便……」')) await click('「這週不太方便……」'); else if (has('「好，沒問題。」')) await click('「好，沒問題。」');
 }
 async function begin(letgo) {
   await click('開始');
@@ -111,14 +111,17 @@ SCRIPTS.fillday = async () => {
 
 // ---- 不同玩法 ----
 const BASE = ['再玩一次', '開播', '繼續 ▶'];
-const TAIL = ['知道了', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '沉默', '照理想做'];
+const TAIL = ['下一季', '報名', '「好，我試試看。」', '「……好的。」', '留下其中一段', '「我在做自己的事。」', '「我想先把自己的事做好。」', '「恭喜！」', '「其實我有在直播。」', '「這週有事，下次！」', '算了', '關掉資料夾', '「好啊！」', '「好的。」', '「這週真的排不出來。」', '「好。」', '「好，一起。」', '「我有在準備了。」', '「我有在做自己的事。」', '「恭喜！我還在找。」', '這週就播', '知道了', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '沉默', '照理想做'];
 async function play(o) {
-  await click('開始'); await click(o.skill || '歌回'); await policy(o.letgo, o.skill);
+  await click(o.three ? '三年' : o.year ? '第一年' : '開始'); await click(o.skill || '歌回'); await policy(o.letgo, o.skill);
   let lastWeek = 0;
-  for (let i = 0; i < 2000; i++) {
+  for (let i = 0; i < (o.three ? 30000 : o.year ? 8000 : 2000); i++) {
     if (has('再玩一次')) break;
+    // 第一年模式：每季開頭都要選方針
+    if (btns().some(b => b.textContent.startsWith('專心：'))) { const sn = f.contentWindow.eval('G.season'); await policy(o.letgo, (o.foci && o.foci[sn - 1]) || o.skill); continue; }
     if (d.body.className === 'plan') {
-      const w = f.contentWindow.eval('G.week'), day = f.contentWindow.eval('G.day');
+      // 用整年的週數，第 1 季第 1 週才是 1
+      const w = f.contentWindow.eval('(G.season - 1) * 4 + G.week'), day = f.contentWindow.eval('G.day');
       if (w !== lastWeek && day === 1) { lastWeek = w; if (o.week) await o.week(w); }
       btns().find(b => b.dataset.i === '0').click(); await sleep(30); continue;
     }
@@ -162,6 +165,29 @@ SCRIPTS.worker = () => play({ letgo: '放下：練習', montage: '多工作', or
 // 同 cutter，但最後一場選「謝謝大家」：剪掉的玩家也要能完成階段並結束活動（docs/03 2.8、2.19）
 SCRIPTS.curtain = () => play({ letgo: '放下：研習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做', '「謝謝大家'],
   montage: '多直播', week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
+
+// ---- 第一年（四季） ----
+const KEEPER = ['照實說也沒關係', '笑死，好可愛', '這段好好', '這波操作', '聲音好舒服', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'];
+const BIGWEEK = async w => { if (w === 1) await setup(); else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } };
+SCRIPTS.yfull = () => play({ year: true, order: KEEPER, week: BIGWEEK });
+// 同上，但每季換一條專心的路線，直播內容也跟著換
+const ROTATE = async w => {
+  if (w === 1) return setup();
+  const k = f.contentWindow.eval('G.focus'); const n = f.contentWindow.eval('ROUTES[G.focus].n');
+  if (has(n)) await click(n);
+  if (f.contentWindow.eval('G.r[G.focus].st') === 1) { await click('練習' + n); for (const dd of [1, 5]) { if (!f.contentWindow.eval(`G.plan[${dd - 1}][0] === "skill:${k}"`)) await cell(dd, 0); } }
+  if (has('做成季末大企劃')) await click('做成季末大企劃'); };
+SCRIPTS.yrotate = () => play({ year: true, foci: ['歌回', '雜談', '遊戲', '聲音'], order: KEEPER, week: ROTATE });
+SCRIPTS.ycutter = () => play({ year: true, letgo: '放下：研習', montage: '多直播', order: ['照實說也沒關係', '笑死，好可愛', '這段好好', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做'], week: BIGWEEK });
+SCRIPTS.ylazy = () => play({ year: true, order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'] });
+SCRIPTS.yoverwork = () => play({ year: true, letgo: '放下：研習', order: ['打賞（小）', '加長直播', '準時下播', '直接睡', '經營社群', '留下', '照理想做'],
+  week: async w => { if (w === 1) { await fillAll('上班'); await fillAll('練習雜談'); await fillAll('準備直播'); } } });
+SCRIPTS.ywish = () => play({ year: true, skill: '雜談', order: ['許願', '沉默', '準時下播', '早點睡', '留下', '沉默'], week: async w => { if (w === 1) await fillAll('在家休息'); } });
+
+// ---- 三年（十二季） ----
+SCRIPTS.zfull = () => play({ three: true, foci: ['歌回', '雜談', '遊戲', '聲音', '歌回', '雜談', '遊戲', '聲音', '歌回', '雜談', '遊戲', '聲音'], order: KEEPER, week: ROTATE });
+SCRIPTS.zcutter = () => play({ three: true, letgo: '放下：練習', montage: '多直播', order: ['照實說也沒關係', '笑死，好可愛', '這段好好', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做'], week: BIGWEEK });
+SCRIPTS.zlazy = () => play({ three: true, order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'] });
 
 // ---- 針對特定規則的檢查 ----
 // 先在 ① 留下兩段，回看日當天才練到 ②：應該當天就升到 ③
