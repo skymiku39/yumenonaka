@@ -3,11 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>中之夢　試玩原型</title>
+  <title>中之夢 v0.1</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    .home { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+    .home h1 { font-size: 40px; margin: 0; letter-spacing: 4px; }
+    .home .sub { margin: 4px 0 20px; color: var(--accent-deep); font-weight: 700; }
+    .home .pitch { line-height: 1.8; margin: 0 0 24px; }
+    .modes { display: grid; gap: 14px; }
+    .mode { display: block; text-decoration: none; color: var(--ink); background: var(--card);
+      border: 3px solid var(--ink); border-radius: 16px; padding: 16px 18px; box-shadow: 0 4px 0 var(--ink); }
+    .mode:hover, .mode:focus-visible { border-color: var(--accent-deep); box-shadow: 0 4px 0 var(--accent-deep); outline: none; }
+    .mode b { font-size: 20px; }
+    .mode .len { margin-left: 8px; color: var(--accent-deep); font-weight: 700; }
+    .mode p { margin: 6px 0 0; line-height: 1.7; }
+    .note { margin-top: 24px; font-size: 14px; line-height: 1.8; opacity: .8; }
+  </style>
 </head>
 <body class="title">
-  <main id="app"></main>
-  <script src="main.js"></script>
+  <main class="home">
+    <h1>中之夢</h1>
+    <p class="sub">Yumenonaka　v0.1</p>
+    <p class="pitch">你同時是 VTuber「薰草」背後的那個人，和聊天室裡的一位觀眾。<br>
+      白天替她排生活，晚上看她直播、留一句話，隔天再替她決定：昨晚那個不像薰草的自己，要留下來，還是剪掉。</p>
+    <nav class="modes">
+      <a class="mode" href="season.html"><b>一季</b><span class="len">四週</span>
+        <p>第一次玩從這裡開始。季初選方針、四個關鍵週、兩場夢，最後一場直播說得出口的那句話決定結局。</p></a>
+      <a class="mode" href="year.html"><b>第一年</b><span class="len">四季</span>
+        <p>大四一整年。家裡每月給生活費，時間被研習佔住；上學期末和年底各考一次，年底沒過就延畢。</p></a>
+      <a class="mode" href="three.html"><b>三年</b><span class="len">十二季</span>
+        <p>完整的三年：大四、畢業後的房租與刷卡、出路與收入。第三年才有機會翻開剪掉的資料夾，也才說得出「其實我有在直播」。</p></a>
+    </nav>
+    <p class="note">三個長度各自存檔，互不覆蓋。進度存在這個瀏覽器裡，下次打開同一個頁面會從最近一次排行程的地方接著玩。<br>
+      數字都還沒平衡，台詞與人物也還是暫代。</p>
+  </main>
 </body>
 </html>
