@@ -275,3 +275,27 @@ SCRIPTS.mix = async () => {
 };
 SCRIPTS.title = async () => {};
 SCRIPTS.howto = async () => { await click('怎麼玩'); };
+
+// ---- 第 7 節還沒決定的選項（網址參數，test/run.py 的 EXTRA 會自動帶上）----
+// q1：照顧得好的玩家，第 3 週也會緊繃到直播
+SCRIPTS.weigh = async () => {
+  await SCRIPTS.carer();
+  const s = JSON.parse(stats());
+  out(s.stat.q1 >= 1 && s.stat.peak >= 5 ? `OK 主線大事壓在心上 ${s.stat.q1} 次，最高壓力 ${s.stat.peak}，接不住 ${s.stat.near}` : 'ERR q1 沒有作用：' + JSON.stringify(s.stat));
+};
+// tight：一直剪掉、主要路線停在 ② 的玩家，一季拿不到謝幕
+SCRIPTS.tightend = async () => {
+  await SCRIPTS.cutter();
+  const end = f.contentWindow.eval('G.end');
+  out(end !== '完成階段並結束活動' ? 'OK 謝幕收緊，結局：' + end : 'ERR 謝幕沒有收緊');
+};
+// 剪掉的資料夾：沒留下過的玩家，「留下其中一段」預設說不出口（深度 1），q6 時說得出口（深度 0）
+const digCheck = want => async () => {
+  await begin();
+  f.contentWindow.eval('G.cut = 6; G.kept = 0; G.stress = 2; digFolder(t => plan(t))');
+  const ok = has('留下其中一段');
+  out(ok === want ? `OK 留下其中一段：${ok ? '說得出口' : '說不出口'}` : `ERR 留下其中一段應該${want ? '說得出口' : '說不出口'}`);
+  if (ok) { await click('留下其中一段'); out('收藏冊：' + f.contentWindow.eval('G.kept') + ' 段'); }
+};
+SCRIPTS.dig = digCheck(false);
+SCRIPTS.q6dig = digCheck(true);

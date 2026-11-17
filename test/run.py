@@ -5,6 +5,7 @@
     python test/run.py --all        連三年的腳本一起跑
     python test/run.py full mix     只跑指定的腳本
     python test/run.py --show 8     每支腳本多印幾行輸出（預設 3 行）
+    python test/run.py --extra q1   多帶網址參數給遊戲，用來比較還沒決定的選項（q1、q6、tight、pace）
 
 需要 Chrome 或 Edge（用無頭模式開 test/harness.html）。找不到時，用環境變數 CHROME 指定執行檔路徑。
 只用 Python 標準函式庫，不需要安裝任何套件。
@@ -20,12 +21,13 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.parse
 
 GAME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_JS = os.path.join(GAME, 'test', 'scripts.js')
 
-# 存檔測試要多帶參數，否則測試模式不讀寫存檔
-EXTRA = {'save': 'forcesave', 'save2': 'forcesave'}
+# 存檔測試要多帶參數，否則測試模式不讀寫存檔；第 7 節選項的檢查要帶對應的開關
+EXTRA = {'save': 'forcesave', 'save2': 'forcesave', 'weigh': 'q1', 'tightend': 'tight', 'q6dig': 'q6'}
 # 失敗的特徵：腳本找不到按鈕、卡住、遊戲出錯
 FAIL = re.compile(r'ERR|MISSING|STUCK|MAX STEPS|沒有這個腳本')
 
@@ -74,12 +76,13 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
 
-def run_one(browser, port, name):
+def run_one(browser, port, name, extra=''):
     # 三年的腳本步數很多，給比較長的虛擬時間
     budget = 900000 if name.startswith('z') else 300000 if name.startswith('y') else 150000
     url = f'http://127.0.0.1:{port}/test/harness.html?s={name}'
-    if name in EXTRA:
-        url += '&extra=' + EXTRA[name]
+    more = '&'.join(x for x in (EXTRA.get(name, ''), extra) if x)
+    if more:
+        url += '&extra=' + urllib.parse.quote(more)
     with tempfile.TemporaryDirectory() as profile:
         cmd = [browser, '--headless=new', '--disable-gpu', '--no-first-run', f'--user-data-dir={profile}',
                f'--virtual-time-budget={budget}', '--dump-dom', url]
@@ -96,6 +99,8 @@ def main():
     ap.add_argument('names', nargs='*', help='腳本名稱；不給就跑全部')
     ap.add_argument('--all', action='store_true', help='連三年（z 開頭）的腳本一起跑')
     ap.add_argument('--show', type=int, default=3, help='每支腳本印出最後幾行')
+    ap.add_argument('--extra', default='', help='多帶給遊戲的網址參數，例如 q1 或 q1&tight')
+    ap.add_argument('--wide', action='store_true', help='輸出的每一行印完整，不截到 200 字')
     args = ap.parse_args()
 
     known = all_scripts()
@@ -116,12 +121,12 @@ def main():
     failed = []
     try:
         for i, name in enumerate(names, 1):
-            text = run_one(browser, port, name)
+            text = run_one(browser, port, name, args.extra)
             lines = [l for l in text.splitlines() if l.strip()]
             bad = text in ('NO OUTPUT', 'TIMEOUT') or any(FAIL.search(l) for l in lines)
             print(f'[{i}/{len(names)}] {"失敗" if bad else "通過"}　{name}')
-            for l in lines[-args.show:]:
-                print('    ' + l[:200])
+            for l in (lines[-args.show:] if args.show > 0 else []):
+                print('    ' + (l if args.wide else l[:200]))
             if bad:
                 failed.append(name)
     finally:

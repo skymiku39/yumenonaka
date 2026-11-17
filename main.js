@@ -185,6 +185,15 @@ const AUTO = location.search.includes('auto');
 // pace=tree 更嚴：整棵樹一季只能升一層（6.7「一季大約推進一層」的字面意思）
 const PACE = location.search.includes('pace');
 const PACE_TREE = location.search.includes('pace=tree');
+// 第 7 節還沒決定的選項，做成網址參數方便比較，預設都不開（docs/03 7.5、7.6、7.8）
+// q1：每季第 3 週的主線大事壓在心上：那一週到直播結束為止，壓力降不到「緊繃」以下（Q1 的 B）
+// q6：翻出剪掉的片段時，「留下其中一段」降成深度 0（Q6 的 B）
+// tight：謝幕要主要路線到 ③，或打開過剪掉的資料夾（7.6）
+const TRY = new URLSearchParams(location.search);
+const Q1 = TRY.has('q1');
+const Q6 = TRY.has('q6');
+const TIGHT = TRY.has('tight');
+const WEIGH = 5; // 「緊繃」的下限
 const canRise = r => !PACE || (PACE_TREE ? !Object.values(G.r).some(x => x.up === G.season) : r.up !== G.season);
 
 const TEST = (AUTO || location.search.includes('seed=')) && !location.search.includes('forcesave'); // 測試時不讀寫存檔
@@ -346,6 +355,7 @@ function night(S) {
   S.rested = false;
   S.pushed = false;
   if (s === 2) S.stress = clamp(S.stress - 3, 0, 10);
+  if (S.weigh) S.stress = Math.max(S.stress, WEIGH);
   if (S === G) { if (s === 2) G.stat.grey++; G.stat.peak = Math.max(G.stat.peak, S.stress); }
   return { g, grey: s === 2 };
 }
@@ -368,7 +378,7 @@ function runSlots(S, d, skip, real) {
 // 照目前的行程往後推，標出會硬撐、錢不夠的格子
 function forecast() {
   const S = JSON.parse(JSON.stringify({ heart: G.heart, stress: G.stress, money: G.money, insp: G.insp, study: G.study,
-    prep: G.prep, rested: G.rested, pushed: G.pushed, r: G.r }));
+    prep: G.prep, rested: G.rested, pushed: G.pushed, r: G.r, weigh: G.weigh }));
   const cells = [];
   let skip = G.skip;
   let live = null;
@@ -928,12 +938,14 @@ const news = (title, text, line) => then => {
 };
 // 翻出剪掉的片段：第三年，剪掉的夠多才有（2.19）
 function digFolder(then) {
-  const can = sayable(1);
+  const dd = Q6 ? 0 : 1;
+  const can = sayable(dd);
+  G.dug = true;
   const k = Object.keys(ROUTES).find(r => G.r[r].st === 2);
   view({ mode: 'day', mood: namiMood(), sky: 3, title: '剪掉的資料夾',
     text: `深夜，她打開那個沒有名字的資料夾。\n裡面有 ${G.cut} 段。每一段的她，都在笑。`,
     choices: [
-      { i: 'heart', t: '留下其中一段', off: !can, x: !can, s: can ? `移進收藏冊。${k ? `${ROUTES[k].n}補上「③ 風格」` : '笑聲往前一步'}（深度 1）` : '還說不出口（深度 1）', on: () => {
+      { i: 'heart', t: '留下其中一段', off: !can, x: !can, s: can ? `移進收藏冊。${k ? `${ROUTES[k].n}補上「③ 風格」` : '笑聲往前一步'}（深度 ${dd}）` : `還說不出口（深度 ${dd}）`, on: () => {
         G.cut--; G.kept++; G.album = (G.album || []).concat([{ k: k || 'talk', text: '從剪掉的資料夾裡翻回來的一段。她在笑。', at: seasonLabel(G) + '第 ' + G.week + ' 週' }]);
         if (k) { G.r[k].st = 3; G.r[k].up = G.season; G.story.push([k, 3]); }
         then('她把其中一段拖回收藏冊。看了很久，沒有刪。'); } },
@@ -985,7 +997,13 @@ Object.assign(EVENTS, {
     choices: [{ t: '繼續 ▶', on: () => then('這一季的最後一場直播，會是一個段落。') }] }),
 });
 
-function weekEvent(then) {
+function weekEvent(then0) {
+  let then = then0;
+  if (Q1 && G.week === 3 && stage() === 0) {
+    // 主線大事的那一週：不管白天照顧得多好，心裡都壓著這件事
+    G.weigh = true; G.stress = Math.max(G.stress, WEIGH); G.stat.q1 = (G.stat.q1 || 0) + 1;
+    then = t => then0('這週的事一直壓在心上。到直播結束以前，休息也只能讓她停在「緊繃」。' + (t ? '\n' + t : ''));
+  }
   const ev = EVENTS[`${G.season}-${G.week}`];
   if (ev) return ev(then);
   // 承諾到期：只在中間兩週、沒有別的事、也不是撐不住的時候（docs/03 2.16）
@@ -1265,6 +1283,7 @@ function startStream() {
   // 第一年的壓力主軸「怕演不好」：開播前會緊張，大企劃更緊張；準備滿了可以抵掉一點（docs/03 2.18）
   const nerve = nerveOf(big);
   addStress(nerve);
+  if (G.weigh) { G.stress = Math.max(G.stress, WEIGH); G.weigh = false; }
   let kept = '';
   if (G.promise && G.promise.k === k) { G.promise = null; G.stat.kept++; addStress(-1); G.fame++; kept = `\n「上次答應要播的${ROUTES[k].n}，今天來了～」（做到了答應的事，壓力 −1）`; }
   // 剪掉的片段讓回放保持完美，下一場多一些人來看（docs/03 2.13 A3）
@@ -1558,6 +1577,7 @@ function weekEnd() {
 }
 
 function nextWeek(wake) {
+  G.weigh = false;
   G.week++;
   G.day = 1;
   G.done = [];
@@ -1697,7 +1717,8 @@ function lastWords() {
   };
   const c = [
     opt('「我會繼續，用我自己的方式。」', 2 + (dir === '標準' ? 1 : dir === '和解' ? -1 : 0), '調整後繼續'),
-    opt('「謝謝大家，薰草就到這裡。」', 0, '完成階段並結束活動', G.r[main].st >= 2, `${ROUTES[main].n}（主要路線）還沒到 ②`),
+    TIGHT ? opt('「謝謝大家，薰草就到這裡。」', 0, '完成階段並結束活動', G.r[main].st >= 3 || !!G.dug, `${ROUTES[main].n}（主要路線）還沒到 ③，也沒打開過剪掉的資料夾`)
+      : opt('「謝謝大家，薰草就到這裡。」', 0, '完成階段並結束活動', G.r[main].st >= 2, `${ROUTES[main].n}（主要路線）還沒到 ②`),
     opt('「我想休息一陣子。」', 0, '暫停後再規劃'),
     { i: 'quiet', t: '照常收播，什麼都沒說', s: '→ 暫停後再規劃（沒有說明的版本）', on: () => { G.end = '暫停後再規劃'; G.endLine = ''; epilogue(0); } }];
   G.savings = savings;
