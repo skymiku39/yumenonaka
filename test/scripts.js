@@ -9,13 +9,17 @@ const WEEK = [
   ['練習雜談', [[5, 0], [5, 1], [7, 0]]],
   ['在家休息', [[1, 3], [2, 3], [3, 3], [4, 3], [5, 2], [6, 0], [6, 1], [7, 1], [7, 3]]],
 ];
+// 分析用：一季下來的統計
+const stats = () => f.contentWindow.eval('JSON.stringify({stat:G.stat,fame:G.fame,kept:G.kept,cut:G.cut,money:G.money,stress:G.stress,study:G.study,exam:G.exam,end:G.end,dir:direction(),r:Object.keys(G.r).map(k=>k+G.r[k].st).join(" ")})');
 const has = t => btns().some(b => !b.disabled && b.textContent.includes(t));
 // 季初方針：專心第一個能選的路線，放下指定的事
 async function policy(letgo, focus) {
   const all = btns().filter(b => !b.disabled && b.textContent.startsWith('專心：'));
   const b = all.find(b => b.textContent.startsWith('專心：' + (focus || '歌回'))) || all[0];
   if (b) { b.click(); await sleep(30); }
-  await click(letgo || '放下：完美');
+  await click(letgo || '放下：練習');
+  // 第 1 週的事件：店長問能不能代班。照目標玩的人拒絕，說不出口時只好答應
+  await click(has('「這週不太方便……」') ? '「這週不太方便……」' : '「好，沒問題。」');
 }
 async function begin(letgo) {
   await click('開始');
@@ -44,7 +48,7 @@ async function advance(stop, max = 400) {
       const go = btns().find(b => b.dataset.i === '0');
       go.click(); await sleep(30); continue;
     }
-    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多練習', '「最近有點累。」', '「都很好啊。」', '入睡', '「那也是我。」', '說出感受', '照理想做', '進考場'];
+    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '知道了', '多練習', '「最近有點累。」', '「都很好啊。」', '入睡', '「那也是我。」', '說出感受', '照理想做', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播'];
     if (has('再玩一次')) return false;
     let done = false;
     for (const t of order) if (has(t)) { await click(t); done = true; break; }
@@ -74,7 +78,7 @@ SCRIPTS.story = async () => { await begin(); await advance(() => (d.querySelecto
 SCRIPTS.plan4 = async () => { await begin(); await advance(() => d.body.className === 'plan' && f.contentWindow.eval('G.week') === 4); out(state()); };
 SCRIPTS.exam = async () => { await begin(); await advance(() => has('進考場')); out(text()); };
 SCRIPTS.tree = async () => { await begin(); await advance(() => d.body.className === 'plan' && f.contentWindow.eval('G.week') === 3); await click('看整棵樹'); };
-SCRIPTS.full = async () => { await begin(); await advance(null, 1500); out(text()); out(state()); };
+SCRIPTS.full = async () => { await begin(); await advance(null, 1500); out(stats()); };
 SCRIPTS.mini = async () => { await begin(); await setup(); await click('開始這一週'); await sleep(200); await click('找靈感小遊戲'); await click('開始'); await sleep(1500); };
 SCRIPTS.save = async () => {
   f.contentWindow.localStorage.clear();
@@ -107,7 +111,7 @@ SCRIPTS.fillday = async () => {
 
 // ---- 不同玩法 ----
 const BASE = ['再玩一次', '開播', '繼續 ▶'];
-const TAIL = ['照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '沉默', '照理想做'];
+const TAIL = ['知道了', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '「我會繼續', '「謝謝大家', '「我想休息', '照常收播', '沉默', '照理想做'];
 async function play(o) {
   await click('開始'); await click(o.skill || '歌回'); await policy(o.letgo, o.skill);
   let lastWeek = 0;
@@ -119,10 +123,10 @@ async function play(o) {
       btns().find(b => b.dataset.i === '0').click(); await sleep(30); continue;
     }
     let done = false;
-    for (const t of BASE.concat(o.order, TAIL)) if (has(t)) { await click(t); done = true; break; }
+    for (const t of BASE.concat(o.order, [o.montage || '多休息'], TAIL)) if (has(t)) { await click(t); done = true; break; }
     if (!done) { out('STUCK: ' + btns().map(b => b.textContent).join(' / ')); break; }
   }
-  out(text()); out(state());
+  out(stats());
 }
 const ALLDAYS = [1, 2, 3, 4, 5, 6, 7];
 async function fillAll(name) { await click(name); for (const dd of ALLDAYS) { d.querySelector(`.dh[data-d="${dd}"]`).click(); await sleep(15); } }
@@ -141,6 +145,23 @@ SCRIPTS.wish = () => play({ skill: '雜談', order: ['許願', '沉默', '加長
   week: async w => { if (w === 1) await fillAll('看電影'); } });
 // 只靠吃好料過日子，看錢花光會怎樣
 SCRIPTS.spender = () => play({ order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'], week: async w => { if (w === 1) await fillAll('吃點好的'); } });
+
+// 照目標排行程，但每段都接住她、回看全部剪掉
+SCRIPTS.cutter = () => play({ letgo: '放下：研習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做'],
+  montage: '多直播', week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
+// 照目標排行程，每段都接住她、全部留下；蒙太奇都休息
+SCRIPTS.carer = () => play({ order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'],
+  week: async w => { if (w === 1) await setup(); else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } } });
+// 同上，但放下研習、蒙太奇都練習（看壓力撐不撐得住）
+SCRIPTS.grinder = () => play({ letgo: '放下：研習', montage: '多練習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'],
+  week: async w => { if (w === 1) { await fillAll('練習歌回'); await click('歌回'); } else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } } });
+// 只顧生活：每天上班與休息，直播全部沉默
+SCRIPTS.worker = () => play({ letgo: '放下：練習', montage: '多工作', order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'],
+  week: async w => { if (w === 1) { await fillAll('在家休息'); await click('上班'); for (const dd of [1, 2, 3, 4, 5]) await cell(dd, 0); } } });
+
+// 同 cutter，但最後一場選「謝謝大家」：剪掉的玩家也要能完成階段並結束活動（docs/03 2.8、2.19）
+SCRIPTS.curtain = () => play({ letgo: '放下：研習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做', '「謝謝大家'],
+  montage: '多直播', week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
 
 // ---- 針對特定規則的檢查 ----
 // 先在 ① 留下兩段，回看日當天才練到 ②：應該當天就升到 ③
@@ -172,7 +193,7 @@ SCRIPTS.minikeys = async () => {
 // 第 1 週結束時壓力撐不住：第 2 週應該是「撐不住的一週」，週一整天起不來，可以休播
 SCRIPTS.crisis = async () => {
   await begin(); await advance(() => has('下一週'));
-  f.contentWindow.eval('G.stress = 9'); await click('下一週'); await click('多工作'); await click('繼續 ▶');
+  f.contentWindow.eval('G.stress = 9'); await click('下一週'); await click('多工作'); await click('繼續 ▶'); await click('知道了');
   out(text()); out('crisis=' + f.contentWindow.eval('G.crisis') + ' 週一：' + d.querySelector('.cell[data-d="1"][data-s="0"]').textContent);
   d.querySelector('[data-act="off"]').click(); await sleep(30);
   out('休播=' + f.contentWindow.eval('G.offLive') + '　' + d.querySelector('.onair').textContent);
