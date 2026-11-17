@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- 照腳本操作遊戲的測試頁。用法見 ../README.md 的「操作測試」。網址參數：s=腳本名、seed=亂數種子、w/h=遊戲視窗大小、extra=要多帶給遊戲的參數 --><meta charset="utf-8"><title>中之夢　操作測試</title>
+<style>body{margin:0}iframe{border:0;display:block}</style>
+<iframe id="f"></iframe><pre id="o" style="font:12px monospace;white-space:pre-wrap;margin:4px"></pre>
+<script>
+const q=new URLSearchParams(location.search);
+const W=+q.get('w')||1280,H=+q.get('h')||900;
+const f=document.getElementById('f');f.style.width=W+'px';f.style.height=H+'px';
+f.src=(q.get('game')||'../index.html')+'?seed='+(q.get('seed')||7)+(q.get('extra')?'&'+q.get('extra'):'');
+const log=[];const out=t=>{log.push(t);document.getElementById('o').textContent=log.join('\n');};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let d;
+const btns=()=>[...d.querySelectorAll('button')];
+async function click(txt){const b=btns().find(b=>!b.disabled&&b.textContent.includes(txt));if(!b){out('MISSING button: '+txt+' | have: '+btns().map(b=>(b.querySelector('b')||b).textContent).join(' / '));throw new Error('missing '+txt);}b.click();await sleep(30);}
+async function cell(dd,s){const b=d.querySelector(`.cell[data-d="${dd}"][data-s="${s}"]`);if(!b){out('MISSING cell '+dd+','+s);throw 0;}b.click();await sleep(10);}
+async function fill(spec){for(const [name,cells] of spec){await click(name);for(const [dd,s] of cells)await cell(dd,s);}}
+const state=()=>f.contentWindow.eval('JSON.stringify({w:G.week,d:G.day,heart:G.heart,stress:G.stress,money:G.money,insp:G.insp,prep:G.prep,study:G.study,show:G.show,big:G.big,r:G.r,kept:G.kept,cut:G.cut})');
+const text=()=>(d.querySelector('.msg p,.note p,.caption,.sheet .text')||{}).textContent;
+const SCRIPTS={};
+f.onload=async()=>{d=f.contentDocument;await sleep(200);
+  const run=SCRIPTS[q.get('s')];
+  if(!run){out('沒有這個腳本。可用的：'+Object.keys(SCRIPTS).join('、'));return;}
+  try{await run();}catch(e){out('ERR '+(e&&e.message||e));}
+  out('TITLE '+d.title+' | body.'+d.body.className);document.title='H-DONE';};
+</script>
+<script src="scripts.js"></script>
