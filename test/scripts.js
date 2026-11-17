@@ -10,9 +10,17 @@ const WEEK = [
   ['在家休息', [[1, 3], [2, 3], [3, 3], [4, 3], [5, 2], [6, 0], [6, 1], [7, 1], [7, 3]]],
 ];
 const has = t => btns().some(b => !b.disabled && b.textContent.includes(t));
-async function begin() {
+// 季初方針：專心第一個能選的路線，放下指定的事
+async function policy(letgo, focus) {
+  const all = btns().filter(b => !b.disabled && b.textContent.startsWith('專心：'));
+  const b = all.find(b => b.textContent.startsWith('專心：' + (focus || '歌回'))) || all[0];
+  if (b) { b.click(); await sleep(30); }
+  await click(letgo || '放下：完美');
+}
+async function begin(letgo) {
   await click('開始');
   await click('歌回');
+  await policy(letgo);
 }
 async function setup() {
   await click('歌回'); // ① 直播內容
@@ -36,7 +44,7 @@ async function advance(stop, max = 400) {
       const go = btns().find(b => b.dataset.i === '0');
       go.click(); await sleep(30); continue;
     }
-    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '入睡', '說出感受', '進考場'];
+    const order = ['再玩一次', '開播', '繼續 ▶', '照實說也沒關係', '笑死，好可愛', '準時下播', '早點睡', '直接睡', '留下', '照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多練習', '「最近有點累。」', '「都很好啊。」', '入睡', '「那也是我。」', '說出感受', '照理想做', '進考場'];
     if (has('再玩一次')) return false;
     let done = false;
     for (const t of order) if (has(t)) { await click(t); done = true; break; }
@@ -99,9 +107,9 @@ SCRIPTS.fillday = async () => {
 
 // ---- 不同玩法 ----
 const BASE = ['再玩一次', '開播', '繼續 ▶'];
-const TAIL = ['照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '入睡', '進考場'];
+const TAIL = ['照行程過完今天', '睡覺，過下一天', '睡覺', '下一週', '多休息', '「最近有點累。」', '「都很好啊。」', '入睡', '進考場', '沉默', '照理想做'];
 async function play(o) {
-  await click('開始'); await click(o.skill || '歌回');
+  await click('開始'); await click(o.skill || '歌回'); await policy(o.letgo, o.skill);
   let lastWeek = 0;
   for (let i = 0; i < 2000; i++) {
     if (has('再玩一次')) break;
@@ -124,7 +132,7 @@ SCRIPTS.perfect = () => play({ order: ['想聽精靈的回答', '這不是薰草
 // 什麼都不排
 SCRIPTS.lazy = () => play({ order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'] });
 // 不休息，只上班和練習
-SCRIPTS.overwork = () => play({ order: ['打賞（小）', '加長直播', '準時下播', '直接睡', '經營社群', '留下', '照理想做'],
+SCRIPTS.overwork = () => play({ letgo: '放下：研習', order: ['打賞（小）', '加長直播', '準時下播', '直接睡', '經營社群', '留下', '照理想做'],
   week: async w => { if (w === 1) { await fillAll('上班'); await fillAll('練習雜談'); await fillAll('準備直播'); } } });
 // 每段都給大額 SC
 SCRIPTS.tipper = () => play({ order: ['打賞（大）', '準時下播', '早點睡', '留下', '說出感受'], week: async w => { if (w === 1) await setup(); } });
@@ -160,6 +168,36 @@ SCRIPTS.minikeys = async () => {
   out('小遊戲中 body.' + d.body.className);
   await sleep(9000);
   out('結束後 body.' + d.body.className + '　' + text().split('\n').pop());
+};
+// 第 1 週結束時壓力撐不住：第 2 週應該是「撐不住的一週」，週一整天起不來，可以休播
+SCRIPTS.crisis = async () => {
+  await begin(); await advance(() => has('下一週'));
+  f.contentWindow.eval('G.stress = 9'); await click('下一週'); await click('多工作'); await click('繼續 ▶');
+  out(text()); out('crisis=' + f.contentWindow.eval('G.crisis') + ' 週一：' + d.querySelector('.cell[data-d="1"][data-s="0"]').textContent);
+  d.querySelector('[data-act="off"]').click(); await sleep(30);
+  out('休播=' + f.contentWindow.eval('G.offLive') + '　' + d.querySelector('.onair').textContent);
+  await advance(() => has('休播，早點休息')); await click('休播，早點休息'); out(text());
+};
+// 緊繃時第一次接住會接不住，第二次才接得住；撐不住時接不住
+SCRIPTS.catch = async () => {
+  await begin(); await advance(() => d.body.className === 'night' && has('沉默'));
+  f.contentWindow.eval('G.stress = 6; G.cur.m = { type: "slip", text: "唱錯了。" }; turn()'); out('緊繃的小字：' + btns()[0].textContent);
+  await click('笑死，好可愛'); out('第一次：' + text() + ' 片段=' + f.contentWindow.eval('G.cur.clips.length'));
+  f.contentWindow.eval('G.cur.m = { type: "slip", text: "又唱錯了。" }; turn()'); await click('笑死，好可愛');
+  out('第二次：' + text() + ' 片段=' + f.contentWindow.eval('G.cur.clips.length'));
+  f.contentWindow.eval('G.stress = 9; G.cur.m = { type: "slip", text: "破音了。" }; turn()'); out('撐不住的小字：' + btns()[0].textContent);
+  await click('笑死，好可愛'); out('撐不住：' + text() + ' 片段=' + f.contentWindow.eval('G.cur.clips.length') + ' 壓力=' + f.contentWindow.eval('G.stress'));
+};
+// 家人電話：沒有留下過片段時，「最近有點累」和「其實我有在直播」都被劃掉
+SCRIPTS.call = async () => {
+  await begin(); await advance(() => d.body.className === 'day' && (d.querySelector('.menu h3') || {}).textContent === '家裡打來的電話');
+  f.contentWindow.eval('G.kept = 0; G.stress = 2; familyCall(t => plan(t))');
+  out(btns().map(b => (b.classList.contains('struck') ? '[劃掉]' : '') + b.textContent).join(' / '));
+};
+// 設備：買了麥克風之後錢變少、之後每場品質 +1
+SCRIPTS.gear = async () => {
+  await begin(); f.contentWindow.eval('G.money = 5000; plan("")'); await click('買新麥克風');
+  out(text() + ' money=' + f.contentWindow.eval('G.money') + ' gear=' + f.contentWindow.eval('JSON.stringify(G.gear)'));
 };
 SCRIPTS.title = async () => {};
 SCRIPTS.howto = async () => { await click('怎麼玩'); };

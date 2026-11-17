@@ -453,3 +453,7 @@ button.cell { display: flex; }
   .sheet { padding: 124px 16px 16px; }
   .who { left: 50%; margin-left: -52px; }
 }
+
+/* 說不出口的選項：照樣列出來，但劃掉（docs/03 2.14） */
+.choices button.struck b { text-decoration: line-through; text-decoration-thickness: 2px; }
+.choices button.struck small { font-style: italic; }
