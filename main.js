@@ -100,7 +100,7 @@ const FANS = ['小穗', '茶泡', '新葉', '路過的草', '夜貓草', '薰衣
 const AMBIENT = ['草安～', '來了來了', '今天也好療癒', '8888', '坐等', '好耶'];
 const ST = ['鎖住', '① 入門', '② 上手', '③ 風格', '④ 代表作'];
 const STRESS = ['平穩', '緊繃', '撐不住'];
-const DAYS = ['週一', '週二', '週三', '週四', '週五', '直播日', '回看日'];
+const DAYS = ['週一', '週二', '週三', '週四', '週五', '直播日', '週日'];
 const SLOTN = ['上午', '下午', '傍晚', '晚上'];
 const SEGS = ['開場', '中段', '收尾', '加長'];
 // 金錢一律是台幣，數字是佔位
@@ -282,6 +282,28 @@ function spend(S, c) {
   return true;
 }
 
+// 不確定的結果（docs/03 2.27 U）：練習、研習、找靈感、準備直播要擲骰；上班、休息與事件排進來的行程一定照計畫
+const RESULT = ['失敗', '成功', '大成功'];
+function chance(S, focus, free) {
+  let p = 80;
+  if (!free && S.heart < 1) p -= 30; // 這一格會硬撐
+  p -= [0, 15, 30][stageOf(S.stress)];
+  if (focus) p += 10;
+  return clamp(p, 10, 95);
+}
+// 排程預估不擲骰，當作成功；正式執行時擲 0–99，小於成功率的五分之一是大成功
+function roll(o, real, p) {
+  o.rate = p;
+  if (!real) return 1;
+  const x = rnd(100);
+  const g = x < p / 5 ? 2 : x < p ? 1 : 0;
+  o.res = g;
+  if (g === 0) G.stat.fail = (G.stat.fail || 0) + 1;
+  if (g === 2) G.stat.crit = (G.stat.crit || 0) + 1;
+  return g;
+}
+const tag = (o, p) => (o.res == null ? '' : `【${RESULT[o.res]}・${p}%】`);
+
 function step(S, a, real) {
   const o = { a, t: '', i: 'quiet', warn: '', msg: '' };
   const cost = c => { if (spend(S, c)) { o.warn = '硬撐'; return '（心力不夠，她硬撐了過去。）'; } return ''; };
@@ -293,17 +315,28 @@ function step(S, a, real) {
   } else if (a === 'study') {
     o.t = '研習'; o.i = 'class';
     if (S.money < PAY.study) { o.warn = S.maybe ? '看打賞夠不夠' : '錢不夠'; o.msg = '想去研習，但講義和車錢湊不出來。'; return o; }
-    const x = cost(1); S.study = clamp(S.study + 7, 0, 100); S.money -= PAY.study; if (real) G.wk.study++;
-    o.msg = `到學校上大四研習，坐在後排抄筆記。講義與車錢 ${nt(PAY.study)}。` + x + (real && Math.random() < 0.15 ? unlockRandom('研習剛好講到') : '');
+    const p = chance(S);
+    const x = cost(1); const g = roll(o, real, p); S.study = clamp(S.study + 7 * g, 0, 100); S.money -= PAY.study; if (real) G.wk.study++;
+    o.msg = tag(o, p) + ['到學校上大四研習，坐在後排，一個字都沒聽進去。', '到學校上大四研習，坐在後排抄筆記。', '到學校上大四研習，老師講的剛好都聽懂了，筆記寫了兩頁。'][g] +
+      `講義與車錢 ${nt(PAY.study)}。` + x + (real && g && Math.random() < 0.15 ? unlockRandom('研習剛好講到') : '');
   } else if (a === 'idea') {
     o.t = '找靈感'; o.i = 'idea';
     if (S.insp >= INSP.max) { o.warn = '靈感已滿'; o.msg = '出門走了一圈，但腦袋已經裝不下了。'; }
-    else { S.insp = clamp(S.insp + INSP.idea, 0, INSP.max); o.msg = `出門走了一圈，記下幾個想法。靈感 +${INSP.idea}。` + (real && Math.random() < 0.25 ? unlockRandom('路上看到有趣的東西') : ''); }
+    else {
+      const p = chance(S, false, true); const g = roll(o, real, p);
+      S.insp = clamp(S.insp + INSP.idea * g, 0, INSP.max);
+      o.msg = tag(o, p) + ['出門走了一圈，什麼都沒想到。', `出門走了一圈，記下幾個想法。靈感 +${INSP.idea}。`, `出門走了一圈，想法一直冒出來，手機的備忘錄寫滿了。靈感 +${INSP.idea * 2}。`][g] +
+        (real && g && Math.random() < 0.25 ? unlockRandom('路上看到有趣的東西') : '');
+    }
   } else if (a === 'prep') {
     o.t = '準備直播'; o.i = 'prep';
     if (G.week === 4 && G.season === G.seasons && (S.maybe || G.day === 7)) { o.warn = '沒有下一場'; o.msg = '這一季的直播都播完了，沒有東西要準備。'; }
     else if (S.prep >= 2) { o.warn = '已經準備好'; o.msg = '流程已經排好了，沒有東西可以再準備。'; }
-    else { const x = cost(1); S.prep++; o.msg = '排了流程，試了一下麥克風。' + x; }
+    else {
+      const p = chance(S); const x = cost(1); const g = roll(o, real, p);
+      S.prep = Math.min(2, S.prep + g);
+      o.msg = tag(o, p) + ['排流程排到一半就卡住了，什麼都沒定下來。', '排了流程，試了一下麥克風。', '流程一次就排順了，連開場的梗都想好了。'][g] + x;
+    }
   } else if (a === 'makeup') {
     o.t = '補考'; o.i = 'class';
     const x = cost(1); S.study = clamp(S.study + 3, 0, 100);
@@ -345,8 +378,9 @@ function step(S, a, real) {
     if (!r.st) { o.warn = '還沒解鎖'; o.msg = `想練${n}，但還不知道從哪裡開始。`; }
     else if (r.st > 1) { o.warn = '練不上去'; o.msg = `${n}再上去不是練出來的。她發了一會兒呆。`; }
     else {
-      const x = cost(1); r.exp++; if (real) G.wk.practice++;
-      o.msg = `練了一輪${n}。`;
+      const p = chance(S, G.focus === k); const x = cost(1); const g = roll(o, real, p);
+      r.exp += g; if (real) G.wk.practice++;
+      o.msg = tag(o, p) + [`練了一輪${n}，怎麼都抓不到感覺。`, `練了一輪${n}。`, `練了一輪${n}，今天特別順，像是突然懂了什麼。`][g];
       if (r.exp >= need(k) && canRise(r)) { r.st = 2; r.exp = 0; r.up = G.season; o.msg += `\n★ ${n}到了「${ST[2]}」。`; if (real) G.story.push([k, 2]); }
       else if (r.exp >= need(k)) { r.exp = need(k); o.msg += `\n（${n}這一季已經升過一層，下一季才會到「${ST[2]}」。）`; }
       o.msg += x;
@@ -468,7 +502,7 @@ function sideInfo() {
 }
 
 function treeModal() {
-  const how = ['解鎖：草民許願、打工、找靈感或研習', '練習 3 次，不是專心的路線 5 次（回看時剪掉片段也會加進度）', '回看時留下 2 段真心片段', `第 4 週做季末大企劃（要先有 ③，靈感 ${INSP.big}）`];
+  const how = ['解鎖：草民許願、打工、找靈感或研習', '練習 3 次，不是專心的路線 5 次（回放編輯時剪掉片段也會加進度）', '回放編輯時留下 2 段真心片段', `第 4 週做季末大企劃（要先有 ③，靈感 ${INSP.big}）`];
   const col = k => {
     const r = G.r[k];
     return `<div class="branch"><h4>${ROUTES[k].n}</h4>` + [0, 1, 2, 3].map(i => {
@@ -480,7 +514,7 @@ function treeModal() {
     <h2>技能樹<button class="mini-btn" data-act="tree">關閉</button></h2>
     <div class="tnode on base"><b>基礎（開場就有）</b><small>說話・開台流程・設備</small></div>
     <div class="branches">${Object.keys(ROUTES).map(col).join('')}</div>
-    <p class="tip">到 ②、③、④ 時各有一段劇情。③ 不是練出來的，要靠回看時留下真心片段。</p></section></div>`;
+    <p class="tip">到 ②、③、④ 時各有一段劇情。③ 不是練出來的，要靠下播後的回放編輯留下真心片段。</p></section></div>`;
 }
 
 // 任何一個行動的圖示、名稱、說明
@@ -574,7 +608,7 @@ function tips(F) {
   if (n('靈感已滿')) t.push('有幾格找靈感時靈感已經滿了，可以換成別的事。');
   const wk4 = Object.keys(ROUTES).find(k => G.r[k].st === 3);
   if (G.week === 4 && G.day < 6 && wk4 && !(G.big && G.show === wk4)) t.unshift(`第 4 週了。把直播內容選成${ROUTES[wk4].n}並做成季末大企劃，就能到「④ 代表作」。`);
-  if (!Object.keys(G.r).some(k => G.r[k].st >= 3) && Object.keys(G.r).some(k => G.r[k].st === 2)) t.push('「③ 風格」不是練出來的：直播時用留言接住她，隔天回看時留下那些片段。');
+  if (!Object.keys(G.r).some(k => G.r[k].st >= 3) && Object.keys(G.r).some(k => G.r[k].st === 2)) t.push('「③ 風格」不是練出來的：直播時用留言接住她，下播後的回放編輯留下那些片段。');
   if (n('練不上去')) t.push('有幾格練習已經練不上去了，可以換成別的事。');
   if (!t.length) t.push('照這樣排沒有明顯的問題。');
   return `<section class="info"><h3>提醒</h3><ul class="goals wrap">${t.slice(0, 4).map(x => `<li>${x}</li>`).join('')}</ul></section>`;
@@ -592,7 +626,8 @@ function grid(F) {
     row.forEach((o, s) => {
       h += `<button class="cell ${past ? 'past' : ''} ${o.warn ? 'bad' : ''} ${o.t ? '' : 'empty'} ${!past && !allowed(G.brush, d, s) ? 'no' : ''} t${s}" style="grid-column:${d + 1};grid-row:${s + 2}"
         data-act="cell" data-d="${d}" data-s="${s}" data-a="${o.a || ''}" ${past ? 'disabled' : ''} aria-label="${DAYS[d - 1]}${SLOTN[s]}：${o.t || '空'}${o.warn ? '，' + o.warn : ''}">` +
-        (o.t ? `<span class="stk">${ICON[o.i]}</span><b>${o.t}</b>` : '<b>＋</b>') + (o.warn ? `<em>${o.warn}</em>` : '') + '</button>';
+        (o.t ? `<span class="stk">${ICON[o.i]}</span><b>${o.t}</b>` : '<b>＋</b>') + (o.warn ? `<em>${o.warn}</em>` : '') +
+        (past ? (o.res != null ? `<i class="rate r${o.res}">${RESULT[o.res]}</i>` : '') : o.rate != null ? `<i class="rate">${o.rate}%</i>` : '') + '</button>';
     });
   }
   const L = F.live;
@@ -782,7 +817,7 @@ function title() {
   const sv = loadSave();
   const how = { i: 'idea', t: '怎麼玩', s: '一週的流程和這一季的目標', on: howTo };
   view({ mode: 'title',
-    text: '平常，你是 VTuber「薰草」本人奈實，排自己的一週。\n直播的晚上，你坐進聊天室，當一位草民看她。你的留言會影響她怎麼接。\n隔天，再回到奈實，決定昨晚的真心片段要留下還是剪掉。\n進度會自動存在這個瀏覽器裡，下次從最近一次排行程的地方接著玩。',
+    text: '平常，你是 VTuber「薰草」本人奈實，排自己的一週。\n直播的晚上，你坐進聊天室，當一位草民看她。你的留言會影響她怎麼接。\n下播後，再回到奈實，在回放公開前決定今晚的真心片段要留下還是剪掉。\n進度會自動存在這個瀏覽器裡，下次從最近一次排行程的地方接著玩。',
     choices: (sv ? [{ i: 'live', t: '繼續上次', s: `${seasonLabel(sv.G)}第 ${sv.G.week} 週　${DAYS[sv.G.day - 1]}`, on: () => { G = sv.G; plan(sv.note); } },
       { i: 'cut', t: '從頭開始', s: `${M.n}。會蓋掉上次的進度`, on: () => pickSkill(M.seasons) }]
       : [{ i: 'live', t: '開始', s: `${M.n}：${M.s}`, on: () => pickSkill(M.seasons) }])
@@ -794,7 +829,8 @@ function howTo() {
     '① 排行程：先決定這週直播播什麼，再把行動放進週曆。紅字是照這樣排會出的問題。\n' +
     '② 過日子：一天一天看結果。每天睡前可以選擇繼續，或隔天早上回週曆改行程。\n' +
     '③ 直播日：你變成聊天室裡的一位草民。每一段先出現一幕，再輪到你選一件事。用留言接住她，她就會露出自己，多一段真心片段。但她壓力緊繃時，第一次會接不住；撐不住時，誰都接不住。\n' +
-    '④ 回看日：回到奈實，決定那些真心片段要留下還是剪掉。留下換的是她自己（③ 風格），剪掉換的是頻道（下一場多一些人來看）。\n' +
+    '④ 下播後：回到奈實，在回放公開前一段一段看今晚的真心片段，旁邊是那一刻的聊天室。留下換的是她自己（③ 風格），剪掉換的是頻道（下一場多一些人來看）。\n' +
+    '練習、研習、找靈感、準備直播不一定成功，週曆上的百分比是成功率：心力不夠、壓力高會變低，專心的路線會變高。上班和休息一定照計畫。\n' +
     '季初先選方針：專心一條路線、放下一件事。關鍵週之間是三週的蒙太奇，選一個重心帶過。每個關鍵週開頭有一件事（請託、期限、電話等）。\n' +
     ({ season: '這一版只有一季，最後一場直播的那句話決定結局。\n\n',
       year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算。第 4 季最後一場直播的那句話決定結局。\n\n',
@@ -1156,7 +1192,7 @@ function paintQuiet(d, s) {
 
 function runDay() {
   const out = runSlots(G, G.day, G.skip, true);
-  G.done[G.day - 1] = out.map(o => ({ a: o.a, t: o.t, i: o.i, warn: o.warn }));
+  G.done[G.day - 1] = out.map(o => ({ a: o.a, t: o.t, i: o.i, warn: o.warn, res: o.res }));
   G.skip = 0;
   const lines = out.map((o, s) => (o.cont ? '' : `【${SLOTN[s]}${out[s + 1] && out[s + 1].cont ? '～' + SLOTN[s + 1] : ''}】${o.msg}`)).filter(Boolean);
   const skies = out.map((o, i) => (o.cont ? -1 : i)).filter(n => n >= 0);
@@ -1279,7 +1315,7 @@ function nextDay(replan) {
   if (n.grey) G.wk.grey = (G.wk.grey || 0) + 1;
   G.morning = n.grey ? '灰色的早晨。她躺到中午才起來，少了一個時段。' : `早上。回復了 ${n.g} 格心力。`;
   if (G.day > 7) return weekEnd();
-  if (G.day === 7) return review(0, G.morning);
+  if (G.day === 7 && G.offLive) G.morning += '\n社群上有幾個草民留言：「好好休息～」「等妳回來」。';
   replan ? plan(G.morning) : runDay();
 }
 
@@ -1433,7 +1469,7 @@ function resolve(act, text, said) {
   const ease = () => { if (C.eased) return '（她已經好過一點了，再多的留言也只是被看到。）'; C.eased = true; addStress(-1); return '（壓力減輕）'; };
   const before = C.clips.length;
   const notKaoru = () => { if (G.kept >= 2 && !C.notKaoru && G.nkSeason !== G.season && Math.random() < 0.35) { C.notKaoru = true; G.nkSeason = G.season; flag('nk'); say('夜貓草', '……這不是薰草吧', 'hl'); } };
-  const clip = t => { notKaoru(); G.stat[warm ? 'warm' : 'self']++; C.clips.push({ k: C.k, k2: C.mix, text: t, by: warm ? '你的留言' : '她自己' }); };
+  const clip = t => { notKaoru(); G.stat[warm ? 'warm' : 'self']++; C.clips.push({ k: C.k, k2: C.mix, text: t, by: warm ? '你的留言' : '她自己', at: C.chat.length }); };
   let out = '';
   let mood = 'normal';
   if (cold && m.type !== 'ok') G.held = (G.held || 0) + 1; // 草民要她維持人設的次數，算進「完美」那一邊
@@ -1458,7 +1494,7 @@ function resolve(act, text, said) {
   line([pre, out].filter(Boolean).join('\n') || '她繼續往下播。', () => {
     if (C.seg < C.max) return segment();
     C.max === 3 ? extendAsk() : closing();
-  }, mood, C.clips.length > before ? '★ 多了一段真心片段。明天回看時，由奈實決定留不留。' : '');
+  }, mood, C.clips.length > before ? '★ 多了一段真心片段。下播後，由奈實決定留不留。' : '');
 }
 
 // 收尾時由奈實決定要不要加長
@@ -1495,24 +1531,32 @@ function offAir() {
   let m = `（回到奈實）下播後三十秒。\n${after}\n今晚的 SC 共 ${nt(gross)}（其中你給了 ${nt(C.tips)}），平台抽三成後入帳 ${nt(total)}。`;
   if (C.notKaoru) { addStress(1); G.stat.nk = (G.stat.nk || 0) + 1; m += '\n「這不是薰草吧」那則留言，她看了好幾遍。（壓力 +1）'; }
   if (C.over) m += '\n「收了這麼多，下次不能出錯。」';
-  m += n ? `\n有 ${n} 段不像薰草、像她自己的片段。明天要決定留不留。` : '\n今晚沒有哪一段脫稿。';
-  G.clips = C.clips;
+  m += n ? `\n有 ${n} 段不像薰草、像她自己的片段。回放公開前，要決定留不留。` : '\n今晚沒有哪一段脫稿，回放直接公開了。';
+  G.clips = C.clips.map(c => ({ ...c, chat: C.chat.slice(Math.max(0, c.at - 3), c.at + 2).map(x => ({ n: x.n, t: x.t, me: x.c === 'me' })) }));
   G.lastStream = `${C.big ? '大企劃・' : ''}${ROUTES[C.k].n}${C.mix ? '×' + ROUTES[C.mix].n : ''}，觀看 ${C.viewers}，片段 ${n}，SC ${gross}，訂閱 +${newSubs}`;
   if (C.big && G.r[C.k].st >= 3) G.bigDone = C.k;
   G.prep = 0;
   G.show = 'talk';
   G.big = false;
   G.mix = false;
-  const ext = C.ext;
+  G.ext = C.ext;
   G.cur = null;
-  const c = ext ? [{ i: 'sleep', t: '直接睡', s: '加長之後沒有力氣做別的事', on: () => nextDay(false) }] : [
-    { i: 'cut', t: '剪輯精華', off: G.week === 4 && G.season === G.seasons, s: G.week === 4 && G.season === G.seasons ? '沒有下一場了' : `下一場多一些人來看，SC 多 ${nt(200)} 左右（抽成前）`, on: () => { G.buzz = 1; G.subs += 10; nextDay(false); } },
-    { i: 'chat', t: '經營社群', s: `靈感 +${INSP.social}`, on: () => { G.insp = clamp(G.insp + INSP.social, 0, INSP.max); nextDay(false); } },
-    { i: 'sleep', t: '早點睡', s: '多睡一點，明早多回 1 格心力', on: () => { G.early = true; nextDay(false); } }];
+  const c = n ? [{ i: 'cut', t: '打開回放編輯', s: `${n} 段真心片段。回放公開前，一段一段決定留不留`, on: () => review(0, '') }] : afterChoices();
   view({ mode: 'day', mood: namiMood(), sky: 3, title: '下播了', text: m, choices: c });
 }
 
-// ---------- 隔天回看：只看真心片段 ----------
+// 回放公開之後，今晚剩下的時間
+function afterChoices() {
+  if (G.ext) return [{ i: 'sleep', t: '直接睡', s: '加長之後沒有力氣做別的事', on: () => nextDay(false) }];
+  const last = G.week === 4 && G.season === G.seasons;
+  return [
+    { i: 'cut', t: '剪輯精華', off: last, s: last ? '沒有下一場了' : `下一場多一些人來看，SC 多 ${nt(200)} 左右（抽成前）`, on: () => { G.buzz = 1; G.subs += 10; nextDay(false); } },
+    { i: 'chat', t: '經營社群', s: `靈感 +${INSP.social}`, on: () => { G.insp = clamp(G.insp + INSP.social, 0, INSP.max); nextDay(false); } },
+    { i: 'sleep', t: '早點睡', s: '多睡一點，明早多回 1 格心力', on: () => { G.early = true; nextDay(false); } },
+    { i: 'prep', t: '明早改行程', s: '直接睡，週日早上回到週曆', on: () => nextDay(true) }];
+}
+
+// ---------- 回放編輯：下播後、回放公開前，只看真心片段（docs/03 2.27 R1） ----------
 function grow() {
   let m = '';
   for (const k in ROUTES) {
@@ -1530,15 +1574,15 @@ function review(i, pre) {
   if (i >= total) {
     G.clips = [];
     G.morning = '';
-    const text = pre + (total ? '\n回看完了。' : G.offLive ? '\n昨晚休播了。社群上有幾個草民留言：「好好休息～」「等妳回來」。' : '\n回看昨晚的直播。每一段都很順，沒有需要決定的地方。') + grow();
-    return story(() => view({ mode: 'day', mood: namiMood(), sky: 0, title: '回看日', text, choices: [
-      { i: 'live', t: '照行程過完今天', on: runDay },
-      { i: 'prep', t: '改今天的行程', s: '回到週曆', on: () => plan('回看完了。今天剩下的時間要做什麼？') }] }));
+    const text = pre + `\n回放公開了。留下 ${G.rv.keep} 段，剪掉 ${G.rv.cut} 段。` + grow();
+    return story(() => view({ mode: 'day', mood: namiMood(), sky: 3, title: '回放公開了', text, choices: afterChoices() }));
   }
   const c = G.clips[i];
   const r = G.r[c.k];
-  view({ mode: 'day', mood: 'laugh', sky: 0, title: `回看昨晚　真心片段 ${i + 1}/${total}`,
-    text: `${pre}\n\n【昨晚・${ROUTES[c.k].n}】${c.text}\n——這一段，是她自己。（起因：${c.by}）`, choices: [
+  // 片段旁邊是那一刻的聊天室：奈實在這裡第一次看到草民的留言（R2）
+  const chat = (c.chat || []).map(x => (x.me ? `　▶ ${x.n}：${x.t}` : `　${x.n}：${x.t}`)).join('\n');
+  view({ mode: 'day', mood: 'laugh', sky: 3, title: `回放編輯　真心片段 ${i + 1}/${total}`,
+    text: `${pre ? pre + '\n\n' : ''}【今晚・${ROUTES[c.k].n}】${c.text}\n——這一段，是她自己。（起因：${c.by}）` + (chat ? `\n\n那一刻的聊天室：\n${chat}` : ''), choices: [
       // 留下換的是「她自己」，剪掉換的是「頻道」（docs/03 2.13 A3）。放下「完美」的這一季，留下不會不安
       { i: 'heart', t: '留下', s: `讓草民看到這個她。${G.letgo === 'perfect' ? '這季放下了完美，不會不安' : '壓力 +1'}，${ROUTES[c.k].n}的真心片段 ${r.st >= 3 ? '已經夠了' : r.kept + '/2'}${c.by === '她自己' ? '（她自己鬆開的，算兩段）' : ''}${c.k2 && G.r[c.k2].st === 2 ? `，${ROUTES[c.k2].n}也算一段（混合企劃）` : ''}　收進收藏冊`, on: () => {
         r.kept += c.by === '她自己' ? 2 : 1; if (c.k2 && G.r[c.k2].st === 2) G.r[c.k2].kept += c.by === '她自己' ? 2 : 1; G.kept++; G.rv.keep++; G.album = (G.album || []).concat([{ k: c.k, text: c.text, at: seasonLabel(G) + '第 ' + G.week + ' 週' }]); // 她自己鬆開的片段比較珍貴，③ 的進度算兩段（docs/03 7.3 D1）

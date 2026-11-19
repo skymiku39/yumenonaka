@@ -232,6 +232,10 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
 .cell .stk { width: 24px; height: 24px; }
 .cell b { font-size: 12.5px; }
 .cell em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #c62828; }
+/* 擲骰的行動：還沒過的顯示成功率，過了的顯示結果（docs/03 2.27 U） */
+.cell .rate { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent-deep); }
+.cell .rate.r0 { color: #c62828; }
+.cell .rate.r2 { color: #2e7d32; }
 .cell.empty { border-style: dashed; background: transparent; opacity: .7; }
 .cell.empty b { font-size: 18px; font-weight: 400; }
 .cell.bad { background: #ffe9e6; border-color: #c62828; }
