@@ -70,6 +70,35 @@ body.dream { --paper: #15131f; --card: #1f1c2e; --ink: #e9e3ff; background-image
   box-shadow: 3px 3px 0 var(--ink);
 }
 .top .when { margin-right: auto; }
+/* 主線面板：期限和兩個條件 */
+.mainline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px 14px;
+  margin: -4px 0 12px;
+  font-size: 14px;
+  background: var(--card);
+  border: 3px dashed var(--accent-deep);
+  border-radius: 16px;
+}
+.mainline .cond { padding: 1px 10px; border: 2px solid var(--ink); border-radius: 999px; }
+.mainline .cond.ok { background: var(--accent); }
+.mainline .cond small { margin-left: 6px; opacity: .7; }
+.mainline em { margin-left: auto; font-style: normal; opacity: .8; }
+.mainline .count b { margin-right: 6px; }
+.mainline .count.end { opacity: .85; }
+.mainline .dots { display: inline-flex; align-items: center; gap: 3px; }
+.mainline .dots i { width: 9px; height: 9px; border: 2px solid var(--ink); border-radius: 50%; }
+.mainline .dots i.gate { width: 14px; height: 14px; border-radius: 4px; margin-right: 5px; }
+.mainline .dots i.exam { border-color: var(--warn); }
+.mainline .dots i.past { background: var(--ink); opacity: .35; }
+.mainline .dots i.now { background: var(--accent-deep); }
+.mainline.soon { border-color: var(--warn); }
+.mainline.soon .count:first-child { color: #c62828; font-weight: 700; }
+.mainline.due { border-style: solid; background: #fff0ee; }
+body.night .mainline.due, body.dream .mainline.due { background: var(--card); }
 .top .when b { font-size: 16px; }
 .mini-btn {
   display: inline-block;

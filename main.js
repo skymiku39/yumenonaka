@@ -150,6 +150,14 @@ const laughOf = n => (n === 0 ? 0 : n < 4 ? 1 : 2);
 // 說得出口的程度 ＝ 笑聲階段 − 壓力的扣分；不到選項的深度就劃掉
 const voiceLv = () => laughOf(G.kept) - stage();
 const sayable = depth => voiceLv() >= depth;
+// 主線：畢業那通電話，找工作還是繼續當薰草（docs/05 第 3 節）。兩個條件都是佔位
+const CHAN = [600, 900]; // 訂閱到這兩個數字：勉強、養得活
+const CHAN_N = ['還不行', '勉強', '養得活'];
+const chanLv = () => (G.subs >= CHAN[1] ? 2 : G.subs >= CHAN[0] ? 1 : 0);
+const gradSay = () => laughOf(G.kept) === 2 && stage() < 2; // 笑聲到「保留」，而且沒有撐不住
+// 離畢業電話還有幾週：一季是 4 個關鍵週加 3 段三週的蒙太奇，共 13 週
+const weeksToGrad = () => (4 - G.season) * 13 + (4 - G.week) * 4;
+const hasMainLine = () => G.seasons > 1 && G.season <= 4 && !G.grad;
 // 草民被認得（docs/03 2.15）
 const FAME = ['陌生', '眼熟', '常客'];
 const fameOf = n => (n < 4 ? 0 : n < 9 ? 1 : 2);
@@ -478,7 +486,34 @@ function topbar() {
     <span class="gauge" data-g="money">${nt(G.money)}</span>
     <span class="gauge" data-g="insp">靈感 ${G.insp}/${INSP.max}</span>
     <span class="gauge" data-g="prep">準備 ${ROUTES[G.show].n} ${G.prep}/2</span>
-    ${canStudy() ? `<span class="gauge" data-g="study">學習度 ${G.study}%</span>` : ''}<span class="gauge" data-g="subs">訂閱 ${G.subs}</span></header>`;
+    ${canStudy() ? `<span class="gauge" data-g="study">學習度 ${G.study}%</span>` : ''}<span class="gauge" data-g="subs">訂閱 ${G.subs}</span></header>${mainLine()}`;
+}
+
+// 主線面板：倒數和兩個條件，一直看得到（docs/05 第 3 節）
+// 倒數有兩層：這一季的關卡（第 4 週的大企劃，有期末的季再加期末），和整段的終點（畢業電話或最後一場）
+function mainLine() {
+  if (!G.r) return '';
+  const year1 = hasMainLine();
+  const left = (4 - G.week) * 4; // 離這一季第 4 週還有幾週
+  const gate = '季末大企劃' + (hasExam() ? (G.season === 4 && G.seasons > 1 ? '＋畢業考' : '＋期末') : '');
+  const days = 6 - G.day; // 直播在第 6 天
+  const when = left ? `還有 ${left} 週` : days > 0 ? `就是這一週，直播在 ${days} 天後` : days === 0 ? '就是今天' : '這一季的直播播完了';
+  // 一格一個關鍵週；第一年畫到畢業（16 格），其他情況畫這一季（4 格）
+  const n = year1 ? 16 : 4, at = year1 ? (G.season - 1) * 4 + G.week : G.week;
+  let dots = '';
+  for (let i = 1; i <= n; i++) {
+    const exam = i % 4 === 0 && (G.seasons === 1 || (year1 ? i === 8 || i === 16 : hasExam()));
+    dots += `<i class="${i < at ? 'past' : i === at ? 'now' : ''}${i % 4 === 0 ? ' gate' : ''}${exam ? ' exam' : ''}" title="${i % 4 === 0 ? (exam ? '季末大企劃＋期末' : '季末大企劃') : '關鍵週'}"></i>`;
+  }
+  const end = year1 ? weeksToGrad() : G.seasons > 4 ? (G.seasons - G.season) * 13 + left : -1;
+  const endName = year1 ? '畢業那通電話' : '最後一場直播';
+  const c = chanLv(), l = laughOf(G.kept);
+  return `<div class="mainline${left <= 4 ? ' soon' : ''}${left === 0 ? ' due' : ''}">
+    <span class="count"><b>${gate}</b>${when}</span><span class="dots">${dots}</span>
+    ${end >= 0 ? `<span class="count end"><b>${endName}</b>${end ? `還有 ${end} 週` : '就在這一季的最後'}</span>` : ''}
+    ${year1 ? `<span class="cond ${c === 2 ? 'ok' : ''}">頻道：${CHAN_N[c]}<small>訂閱 ${G.subs}／${CHAN[1]}，剪掉長得快</small></span>
+    <span class="cond ${l === 2 ? 'ok' : ''}">她：${LAUGH[l]}<small>留下 ${G.kept}／4 段，留下才會長</small></span>
+    <em>找工作，還是繼續當薰草？</em>` : ''}</div>`;
 }
 
 function sideInfo() {
@@ -833,7 +868,7 @@ function howTo() {
     '練習、研習、找靈感、準備直播不一定成功，週曆上的百分比是成功率：心力不夠、壓力高會變低，專心的路線會變高。上班和休息一定照計畫。\n' +
     '季初先選方針：專心一條路線、放下一件事。關鍵週之間是三週的蒙太奇，選一個重心帶過。每個關鍵週開頭有一件事（請託、期限、電話等）。\n' +
     ({ season: '這一版只有一季，最後一場直播的那句話決定結局。\n\n',
-      year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算。第 4 季最後一場直播的那句話決定結局。\n\n',
+      year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算，之後家裡會打來問工作：找工作，還是繼續當薰草？那通電話裡她說得出哪一句，看頻道養不養得活她（剪掉長得快）和她說不說得出口（留下才會長）。\n\n',
       three: '這一版有十二季：第一年大四，第二年畢業後，第三年出路與收入。第三年最後一場直播的那句話決定結局。\n\n' })[MODE] +
     '【這一季的目標】\n' +
     '・把一條路線練到「② 上手」（練習 3 次）\n' +
@@ -853,7 +888,7 @@ function pickSkill(seasons) {
   view({ mode: 'title', text: '奈實已經播了兩年多。雜談是基本功，另外選一項她擅長的：',
     choices: Object.keys(ROUTES).map(k => ({ i: 'live', t: ROUTES[k].n,
       s: k === 'talk' ? '只專心雜談，練習已經有底子' : '開場就會，而且練習已經有底子',
-      on: () => { newGame(k, seasons); policy(() => weekEvent(t => plan(t + '\n' + `大四開學，直播已經兩年多了。家裡這個月的生活費 ${nt(PAY.allowance)} 入帳了，下一筆要等下個月。\n照 ①②③ 的順序排好這一週。直播在第 6 天，隔天回看。`))); } })) });
+      on: () => { newGame(k, seasons); policy(() => weekEvent(t => plan(t + '\n' + (seasons > 1 ? '大四開學。畢業那天家裡的生活費就停了，到時候她得回答：找工作，還是繼續當薰草？\n' : '') + `大四開學，直播已經兩年多了。家裡這個月的生活費 ${nt(PAY.allowance)} 入帳了，下一筆要等下個月。\n照 ①②③ 的順序排好這一週。直播在第 6 天，隔天回看。`))); } })) });
 }
 
 // 季初方針：專心一條路線、放下一件事。沒達成不算失敗（docs/03 2.16）
@@ -1085,8 +1120,8 @@ function familyCall(q, then, more, liveDepth) {
       { i: 'chat', t: '「都很好啊。」', s: '壓力 +1（說謊也累）', on: () => { addStress(1); done('「那就好。」掛掉之後，她在床邊坐了一會兒。')(); } },
       ...(more || []).map(m => ({ ...m, on: () => { m.fx(); done(m.after)(); } })),
       { i: 'chat', t: '「最近有點累。」', off: !can, x: !can, s: can ? '壓力 −1' : '還說不出口', on: () => { addStress(-1); done('「累就早點睡，不要一直熬夜。」家人沒有多問。她說好。')(); } },
-      { i: 'chat', t: '「其實我有在直播。」', off: !tell, x: !tell, s: tell ? `壓力 −2。說出來以後，就收不回去了（深度 ${ld}）` : ld === 3 ? '還說不出口（第一年都說不出口）' : `還說不出口（深度 ${ld}）`,
-        on: () => { G.told = true; addStress(-2); done('電話那頭安靜了很久。「……是喔。那妳自己要想清楚。」掛掉之後，她的手還在抖。但胸口是鬆的。')(); } }] });
+      ...(G.told ? [] : [{ i: 'chat', t: '「其實我有在直播。」', off: !tell, x: !tell, s: tell ? `壓力 −2。說出來以後，就收不回去了（深度 ${ld}）` : ld === 3 ? '還說不出口（第一年都說不出口）' : `還說不出口（深度 ${ld}）`,
+        on: () => { G.told = true; addStress(-2); done('電話那頭安靜了很久。「……是喔。那妳自己要想清楚。」掛掉之後，她的手還在抖。但胸口是鬆的。')(); } }])] });
 }
 
 // 蒙太奇：關鍵週之間約三週，選一個重心一次結算（docs/03 2.16）
@@ -1699,7 +1734,7 @@ function exam() {
 }
 
 function afterExam() {
-  if (G.season === 4 && G.seasons > 1) return yearEndCall(G.seasons > 4 ? seasonSummary : lastWords);
+  if (G.season === 4 && G.seasons > 1) return yearEndCall(G.seasons > 4 ? seasonSummary : () => epilogue(0));
   if (G.season < G.seasons) return seasonSummary();
   lastWords();
 }
@@ -1740,14 +1775,34 @@ function nextSeason() {
   policy(() => weekEvent(t => plan((t ? t + '\n' : '') + intro)));
 }
 
-// 第一年的最後：畢業結算之後，家裡打來（docs/03 2.20）
+// 第一年的最後：畢業結算之後，家裡打來。四種回答，看頻道和說不說得出口（docs/05 第 3 節）
+const GRAD = {
+  both: ['「其實我有在直播。我想繼續做下去。」', '繼續，家裡知道', '電話那頭安靜了很久。「……是喔。那妳自己要想清楚。」\n掛掉之後，她的手還在抖。但胸口是鬆的。'],
+  hide: ['「找到工作了，不用擔心。」', '繼續，但瞞著家裡', '「真的？太好了！是什麼工作？」「……就，網路相關的。」\n掛掉之後，她看著開播軟體的圖示，看了很久。'],
+  side: ['「我有在直播。我會先去上班，但不會停。」', '上班，薰草變成週末的事', '「直播？……好吧，工作有找就好。」\n家人沒有多問。她說的每一句都是真的。'],
+  job: ['「嗯，我會去找。」', '去找工作；薰草的去留沒有人知道', '「那就好，有需要再說。」\n掛掉之後，她打開人力銀行的網頁。隔壁的分頁是頻道後台。'],
+};
 function yearEndCall(then) {
   const pass = G.exam;
   if (!pass) { addStress(2); G.retakePending = true; }
   const q = pass ? '「畢業了！太好了。那工作找得怎麼樣？家裡的生活費就給到這個月喔。」'
     : '「延畢？……那要再兩個月。生活費我們沒辦法再給了。」（壓力上升）';
-  const more = G.resume ? [{ i: 'prep', t: '「我有在準備了。」', s: '壓力 −1（和同學寫過履歷）', fx: () => addStress(-1), after: '「那就好，有需要再說。」這句話是真的，只是不完整。' }] : [];
-  familyCall(q, () => then(), more);
+  const chan = chanLv() === 2, say = gradSay();
+  const noChan = `頻道還養不活她（訂閱 ${G.subs}／${CHAN[1]}）`;
+  const noSay = laughOf(G.kept) < 2 ? `還說不出口（笑聲要到「保留」，現在是「${LAUGH[laughOf(G.kept)]}」）` : '還說不出口（她快撐不住了）';
+  const opt = (k, ok, why, fx) => ({ i: 'chat', t: GRAD[k][0], off: !ok, x: !ok, s: ok ? `→ ${GRAD[k][1]}` : why,
+    on: () => {
+      fx();
+      G.grad = k; G.end = GRAD[k][1]; G.endLine = GRAD[k][0];
+      view({ mode: 'day', mood: namiMood(), sky: 3, title: '家裡打來的電話', text: GRAD[k][2], choices: [{ t: '繼續 ▶', on: () => then() }] });
+    } });
+  view({ mode: 'day', mood: namiMood(), sky: 0, title: '畢業那通電話',
+    text: `手機響了。是家裡。\n${q}\n\n頻道：${CHAN_N[chanLv()]}（訂閱 ${G.subs}）。笑聲：${LAUGH[laughOf(G.kept)]}，壓力：${STRESS[stage()]}。`,
+    choices: [
+      opt('both', chan && say, !chan ? noChan : noSay, () => { G.told = true; addStress(-2); }),
+      opt('hide', chan, noChan, () => addStress(1)),
+      opt('side', say, noSay, () => { G.told = true; addStress(-1); }),
+      opt('job', true, '', () => {})] });
 }
 
 // 理想中的薰草的方向：夢裡最常選的回答，平手看最後一場（docs/03 2.19）
@@ -1807,6 +1862,14 @@ function epilogue(i) {
         : G.savings ? '她在行事曆上圈了三個月後的一天。旁邊寫著：「回來的時候要做什麼」。'
           : '她多排了班。頻道先放著，密碼還記得。') + (G.told ? '\n週末，家裡打來，問她最近的直播。她說：「下次傳給你們看。」' : '')],
   ];
+  // 第一年版的結尾是畢業電話，不是最後一場的那句話（docs/05 第 4 節）
+  if (G.grad && G.seasons <= 4) {
+    cards[0] = ['畢業那天', `${G.endLine}\n頻道訂閱 ${G.subs}，收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。`];
+    cards[3] = ['之後', { both: '下週一，她照常排了行程。週曆上的直播日，她自己畫了一朵花。\n週末，家裡打來，問她最近的直播。她說：「下次傳給你們看。」',
+      hide: '她照常開播，SC 入帳，房租付得出來。\n家裡偶爾問起工作，她說「還不錯」。這句話她越說越熟。',
+      side: '平日上班，週六晚上開播。聊天室的人少了一些，留下來的都認得她的笑聲。',
+      job: '她投了幾份履歷。頻道先放著，密碼還記得。\n沒有人問她薰草去哪了，因為沒有人知道。' }[G.grad]];
+  }
   if (i >= cards.length) return ending();
   const [title, text] = cards[i];
   view({ mode: i === 2 ? 'dream' : 'day', mood: G.kept ? 'laugh' : 'normal', sky: i === 0 ? 3 : 0, title: `尾聲：${title}`, text,
@@ -1830,7 +1893,7 @@ function ending() {
     `夢裡的回答：${tally(G.dream)}。\n` +
     `方針紀錄：${policyLog}。蒙太奇：${tally(G.montage) || '（沒有）'}。\n` +
     `收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。她認得你：${FAME[fameOf(G.fame)]}。頻道訂閱 ${G.subs}。\n` +
-    (G.end ? `結局：${G.end}${G.endLine ? '。她說：' + G.endLine : '。她什麼都沒說，照常收播。'}${G.end === '暫停後再規劃' ? (G.savings ? '存款夠，這是有計畫的休息。' : '存款不夠，她回去多排班，頻道先放著。') : ''}\n` : '') +
+    (G.end ? `${G.grad && G.seasons <= 4 ? '畢業電話' : '結局'}：${G.end}${G.endLine ? '。她說：' + G.endLine : '。她什麼都沒說，照常收播。'}${G.end === '暫停後再規劃' ? (G.savings ? '存款夠，這是有計畫的休息。' : '存款不夠，她回去多排班，頻道先放著。') : ''}\n` : '') +
     (G.cut + (G.held || 0) > G.kept ? '回放裡的薰草一直很完美。' : G.kept ? '有幾段笑聲留在了頻道上。' : `這一${year ? '年' : '季'}沒有特別的片段。`) +
     '\n留下或剪掉，都沒有標準答案。';
   if (AUTO) document.title = 'AUTO-DONE';
