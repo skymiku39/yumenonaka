@@ -146,15 +146,15 @@
 **一次跑全部**：`test/run.py` 會自己開本機伺服器、用無頭模式的 Chrome（或 Edge）跑 `test/scripts.js` 的每一支腳本，最後列出失敗的。只用 Python 標準函式庫。
 
 ```powershell
-python "D:\github\薰草\game\test\run.py"
+python "Y:\薰草\game\test\run.py"
 ```
 
-預設不跑三年的腳本（`z` 開頭，一支要幾分鐘）；加 `--all` 一起跑，或在後面寫腳本名稱只跑那幾支，例如 `python "D:\github\薰草\game\test\run.py" full mix`。有失敗時結束代碼是 1。找不到瀏覽器時，用環境變數 `CHROME` 指定執行檔路徑。
+預設不跑三年的腳本（`z` 開頭，一支要幾分鐘）；加 `--all` 一起跑，或在後面寫腳本名稱只跑那幾支，例如 `python "Y:\薰草\game\test\run.py" full mix`。有失敗時結束代碼是 1。找不到瀏覽器時，用環境變數 `CHROME` 指定執行檔路徑。
 
 比較還沒決定的選項時，用 `--extra` 把上面的比較用參數帶給每一支腳本，`--wide` 讓統計那一行完整印出來：
 
 ```powershell
-python "D:\github\薰草\game\test\run.py" full carer cutter --extra "q1&tight" --wide
+python "Y:\薰草\game\test\run.py" full carer cutter --extra "q1&tight" --wide
 ```
 
 **在瀏覽器裡看一支腳本跑**：線上版直接打開 <https://skymiku39.github.io/yumenonaka/test/harness.html?s=full>（`s` 換成腳本名稱）。腳本會自動開對的頁面：`y` 開頭用 `year.html`、`z` 開頭用 `three.html`，其餘用 `season.html`；要指定的話加 `page=year` 之類的參數。本機的話，瀏覽器不允許本機檔案互相讀取，要先開一個本機伺服器，步驟在下面。
