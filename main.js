@@ -111,7 +111,7 @@ const PAY = {
   living: 3000,    // 每週開銷：吃飯、交通、網路
   work: 800,       // 一班 4 小時，時薪 200
   study: 150,      // 一次研習的講義與車錢
-  scS: 75, scL: 750, wish: 150, // 玩家的 SC 金額
+  scS: 30, scL: 150, wish: 30, // 玩家的 SC 金額。小頻道的 SC 很少（docs/03 2.29）
   cut: 0.7,        // 平台抽三成，她拿七成
 };
 // 靈感一律整數。找靈感 +2，玩小遊戲再 +1，等於原本的 1 與 0.5 都乘以二
@@ -141,7 +141,7 @@ const restSub = r => (r.cost ? '出門。' : '') + `心力 +${r.heart}　壓力 
 const STUDY_DAYS = [2, 4]; // 大四研習只開在這幾天（1＝週一）
 // 設備：一次性購買，只影響演出品質（docs/03 2.13 A4）
 const GEAR = {
-  mic: { n: '新麥克風', cost: 2500, s: '之後每場品質 +1（出包變少、SC 變多）' },
+  mic: { n: '新麥克風', cost: 2500, s: '之後每場品質 +1（出包變少）' },
   light: { n: '補光燈', cost: 1200, s: '之後每場觀看 +10' },
 };
 // 笑聲三階段與「說不出口」（docs/03 2.14）
@@ -151,8 +151,8 @@ const laughOf = n => (n === 0 ? 0 : n < 4 ? 1 : 2);
 const voiceLv = () => laughOf(G.kept) - stage();
 const sayable = depth => voiceLv() >= depth;
 // 主線：畢業那通電話，找工作還是繼續當薰草（docs/05 第 3 節）。兩個條件都是佔位
-const CHAN = [600, 900]; // 訂閱到這兩個數字：勉強、養得活
-const CHAN_N = ['還不行', '勉強', '養得活'];
+const CHAN = [600, 1000]; // 訂閱到這兩個數字：快到了、看得到路。直播幾乎不賺錢，所以不叫「養得活」（docs/03 2.29 的 A）
+const CHAN_N = ['還很遠', '快到了', '看得到路'];
 const chanLv = () => (G.subs >= CHAN[1] ? 2 : G.subs >= CHAN[0] ? 1 : 0);
 const gradSay = () => laughOf(G.kept) === 2 && stage() < 2; // 笑聲到「保留」，而且沒有撐不住
 // 離畢業電話還有幾週：一季是 4 個關鍵週加 3 段三週的蒙太奇，共 13 週
@@ -171,7 +171,7 @@ const MONTAGE = {
   practice: { n: '多練習', s: '專心路線練習 +2　壓力 +1', cards: ['錄下自己的聲音重聽', '同一段練到第十遍', '筆記本又寫滿一本'] },
   rest: { n: '多休息', s: '壓力 −3', cards: ['睡到自然醒', '去公園坐了一個下午', '把房間整理乾淨'] },
   work: { n: '多工作', s: `錢 +${'NT$2,400'}　壓力 +2`, cards: ['多排了幾個班', '店長說妳最近很穩', '下班的公車上睡著'] },
-  live: { n: '多直播', s: '錢 +NT$1,200　被認得 +2　壓力 +1　下一場多一些人來看', cards: ['多開了兩場雜談', '聊天室多了幾個新名字', '回放的觀看數慢慢往上'] },
+  live: { n: '多直播', s: '被認得 +2　訂閱 +40　壓力 +1　下一場多一些人來看', cards: ['多開了兩場雜談', '聊天室多了幾個新名字', '回放的觀看數慢慢往上'] },
   study: { n: '多研習', s: '學習度 +20　錢 −NT$450　壓力 +1', cards: ['坐在第一排抄筆記', '和同學借了上週的講義', '期末的範圍終於看完一輪'] },
 };
 // 技能樹：每條路線四層的名字（docs/03 的 2.8）
@@ -205,7 +205,9 @@ const TIGHT = TRY.has('tight');
 const WEIGH = 5; // 「緊繃」的下限
 const canRise = r => !PACE || (PACE_TREE ? !Object.values(G.r).some(x => x.up === G.season) : r.up !== G.season);
 
-const TEST = (AUTO || location.search.includes('seed=')) && !location.search.includes('forcesave'); // 測試時不讀寫存檔
+// debug：設計測試面板，可以跳到指定的季、週、畫面，也可以直接改數值（docs/03 2.28）。面板在檔案最後
+const DEBUG = TRY.has('debug');
+const TEST = (AUTO || DEBUG || location.search.includes('seed=')) && !location.search.includes('forcesave'); // 測試時不讀寫存檔
 // 三個長度各自一個頁面，頁面用 window.MODE 指定；存檔也分開，互不覆蓋
 const VERSION = 'v0.1';
 const MODES = {
@@ -228,7 +230,8 @@ function clearSave() { if (TEST) return; try { localStorage.removeItem(SAVE_KEY)
 
 let G = null;
 let V = null;
-let showTree = location.search.includes('tree'); // 網址加 tree 可直接打開技能樹（測試用）
+let menuTab = location.search.includes('tree') ? 'tree' : null; // 打開的選單分頁；網址加 tree 可直接打開技能樹（測試用）
+let pickOpen = false; // 排行程時「這週直播播什麼」的選擇面板
 
 function newGame(first, seasons) {
   G = { week: 1, day: 1, heart: 4, stress: 2, money: PAY.start + PAY.allowance, insp: INSP.show, study: 0, prep: 0, buzz: 0,
@@ -453,6 +456,7 @@ function forecast() {
 
 // ---------- 畫面 ----------
 function view(o) {
+  if (!V || V.mode !== o.mode) pickOpen = false;
   V = o;
   render();
 }
@@ -470,11 +474,15 @@ function pips(n, max, cls) {
   return `<span class="pips">${h}</span>`;
 }
 
-function buttons() {
-  return `<div class="choices">${V.choices.map((c, i) =>
-    `<button data-i="${i}" class="${c.i ? '' : 'plain'}${c.x ? ' struck' : ''}" ${c.off ? 'disabled' : ''}>` +
+// 選項。only 可以只畫其中一部分（直播畫面把說話和花錢的選項分兩處放），data-i 仍是原本的順序。
+// 往下走的那一顆（c.go，或畫面上只有一個選項）用主要按鈕的樣式（docs/06 3.1）
+function buttons(only) {
+  const one = V.choices.length === 1;
+  const key = V.mode === 'night' && !one; // 直播的選項分兩處放，標上數字鍵
+  return `<div class="choices">${V.choices.map((c, i) => (only && !only(c) ? '' :
+    `<button data-i="${i}" class="${c.i ? '' : 'plain'}${c.x ? ' struck' : ''}${c.go || one ? ' go' : ''}" ${c.off ? 'disabled' : ''}>` +
     (c.i ? `<span class="stk ic">${ICON[c.i]}</span>` : '') +
-    `<b>${c.t}</b>${c.s ? `<small>${c.s}</small>` : ''}</button>`).join('')}</div>`;
+    `<b>${c.t}</b>${c.s ? `<small>${c.s}</small>` : ''}${key ? `<kbd>${i + 1}</kbd>` : ''}</button>`)).join('')}</div>`;
 }
 
 function topbar() {
@@ -483,13 +491,10 @@ function topbar() {
     <span class="when"><b>${seasonLabel(G)}第 ${G.week} 週　${DAYS[Math.min(G.day, 7) - 1]}</b></span>
     <span class="gauge" data-g="heart">心力 ${pips(G.heart, HMAX(), '')}</span>
     <span class="gauge" data-g="stress"><span class="badge stage${s}">壓力 ${STRESS[s]}</span></span>
-    <span class="gauge" data-g="money">${nt(G.money)}</span>
-    <span class="gauge" data-g="insp">靈感 ${G.insp}/${INSP.max}</span>
-    <span class="gauge" data-g="prep">準備 ${ROUTES[G.show].n} ${G.prep}/2</span>
-    ${canStudy() ? `<span class="gauge" data-g="study">學習度 ${G.study}%</span>` : ''}<span class="gauge" data-g="subs">訂閱 ${G.subs}</span></header>${mainLine()}`;
+    <span class="gauge" data-g="money">${nt(G.money)}</span>${mainLine()}</header>`;
 }
 
-// 主線面板：倒數和兩個條件，一直看得到（docs/05 第 3 節）
+// 主線倒數：一直看得到（docs/05 第 3 節）。兩個條件收進選單的「目標」（docs/06 第 7 節 c），見 mainConds()
 // 倒數有兩層：這一季的關卡（第 4 週的大企劃，有期末的季再加期末），和整段的終點（畢業電話或最後一場）
 function mainLine() {
   if (!G.r) return '';
@@ -507,49 +512,92 @@ function mainLine() {
   }
   const end = year1 ? weeksToGrad() : G.seasons > 4 ? (G.seasons - G.season) * 13 + left : -1;
   const endName = year1 ? '畢業那通電話' : '最後一場直播';
-  const c = chanLv(), l = laughOf(G.kept);
-  return `<div class="mainline${left <= 4 ? ' soon' : ''}${left === 0 ? ' due' : ''}">
+  return `<span class="mainline${left <= 4 ? ' soon' : ''}${left === 0 ? ' due' : ''}">
     <span class="count"><b>${gate}</b>${when}</span><span class="dots">${dots}</span>
-    ${end >= 0 ? `<span class="count end"><b>${endName}</b>${end ? `還有 ${end} 週` : '就在這一季的最後'}</span>` : ''}
-    ${year1 ? `<span class="cond ${c === 2 ? 'ok' : ''}">頻道：${CHAN_N[c]}<small>訂閱 ${G.subs}／${CHAN[1]}，剪掉長得快</small></span>
-    <span class="cond ${l === 2 ? 'ok' : ''}">她：${LAUGH[l]}<small>留下 ${G.kept}／4 段，留下才會長</small></span>
-    <em>找工作，還是繼續當薰草？</em>` : ''}</div>`;
+    ${end >= 0 ? `<span class="count end"><b>${endName}</b>${end ? `還有 ${end} 週` : '就在這一季的最後'}</span>` : ''}</span>`;
 }
 
-function sideInfo() {
+// 主線的兩個條件（第一年版）：放在選單的「目標」
+function mainConds() {
+  if (!hasMainLine()) return '';
+  const c = chanLv(), l = laughOf(G.kept);
+  return `<h3>畢業那通電話：找工作，還是繼續當薰草？</h3><ul class="goals wrap">
+    <li class="${c === 2 ? 'ok' : ''}">頻道：${CHAN_N[c]}（訂閱 ${G.subs}／${CHAN[1]}，剪掉長得快）</li>
+    <li class="${l === 2 ? 'ok' : ''}">她：${LAUGH[l]}（留下 ${G.kept}／4 段，留下才會長）</li></ul>`;
+}
+
+// ---------- 固定選單與選單面板（docs/06 3.6）----------
+// 每個畫面左邊同一個位置有五個入口，打開的面板蓋在原本的畫面上。夢和標題沒有選單。
+const MENU = { tree: '技能樹', goal: '目標', gear: '設備', album: '收藏冊', set: '設定' };
+function rail() {
+  return `<nav class="rail" aria-label="選單">${Object.keys(MENU).map(k =>
+    `<button class="rail-btn ${menuTab === k ? 'on' : ''}" data-act="menu" data-tab="${k}" aria-pressed="${menuTab === k}">${MENU[k]}</button>`).join('')}</nav>`;
+}
+// 選單在 DOM 裡排在內容後面，用 CSS 放到左邊：這樣畫面上第一顆按鈕仍然是第一個選項（操作測試靠這個）
+const shell = inner => `<div class="shell"><div class="page">${inner}</div>${rail()}</div>`;
+
+function goalBody() {
   const any = n => Object.keys(G.r).some(k => G.r[k].st >= n);
   const goal = (ok, t) => `<li class="${ok ? 'ok' : ''}">${ok ? '✓' : '□'} ${t}</li>`;
-  const tree = Object.keys(ROUTES).map(k => {
-    const r = G.r[k];
-    const nodes = [1, 2, 3, 4].map(i => `<span class="node ${r.st >= i ? 'on' : r.st + 1 === i ? 'next' : ''}">${NUM[i - 1]}</span>`).join('');
-    return `<li class="${r.st ? 'open' : ''}"><b>${ROUTES[k].n}<span class="nodes">${nodes}</span></b><small>${hint(k)}</small></li>`;
-  }).join('');
   return `<section class="info"><h3>這一季的目標</h3><ul class="goals">
       ${goal(any(2), '一條路線到「② 上手」')}
       ${goal(any(3), '留下 2 段真心片段 →「③ 風格」')}
       ${goal(any(4), `第 4 週季末大企劃（靈感 ${INSP.big}）→「④ 代表作」`)}
       ${hasExam() ? goal(G.exam === true, `第 4 週${G.season === 4 ? '畢業考' : '期末'}，合格機率 ${passRate()}%`) : '<li>□ 這季沒有期末，學習度留到學期末一起算</li>'}</ul>
-    <h3>技能樹<button class="mini-btn" data-act="tree">看整棵樹</button></h3><ul class="tree">${tree}</ul>
+    ${mainConds()}
     <h3>她和你</h3><ul class="goals wrap">
       <li>方針：專心${ROUTES[G.focus].n}${G.letgo ? `，放下${LETGO[G.letgo]}` : ''}</li>
       <li>笑聲：${LAUGH[laughOf(G.kept)]}（留下 ${G.kept} 段）　說得出口：${['很難', '一點點', '可以', '比較能'][clamp(voiceLv() + 1, 0, 3)]}</li>
-      <li>她認得你：${FAME[fameOf(G.fame)]}${G.gear.mic || G.gear.light ? '　設備：' + Object.keys(G.gear).map(k => GEAR[k].n).join('、') : ''}</li></ul></section>`;
+      <li>她認得你：${FAME[fameOf(G.fame)]}</li>
+      <li>頻道：訂閱 ${G.subs}${canStudy() ? `　學習度 ${G.study}%` : ''}</li></ul></section>`;
 }
 
-function treeModal() {
+function treeBody() {
   const how = ['解鎖：草民許願、打工、找靈感或研習', '練習 3 次，不是專心的路線 5 次（回放編輯時剪掉片段也會加進度）', '回放編輯時留下 2 段真心片段', `第 4 週做季末大企劃（要先有 ③，靈感 ${INSP.big}）`];
   const col = k => {
     const r = G.r[k];
-    return `<div class="branch"><h4>${ROUTES[k].n}</h4>` + [0, 1, 2, 3].map(i => {
+    return `<div class="branch ${r.st ? '' : 'off'}"><h4>${ROUTES[k].n}</h4>` + [0, 1, 2, 3].map(i => {
       const prog = r.st !== i ? '' : i === 1 ? `　${r.exp}/${need(k)}` : i === 2 ? `　${r.kept}/2` : '';
       return `<div class="tnode ${r.st > i ? 'on' : r.st === i ? 'next' : ''}"><b>${NUM[i]} ${NODES[k][i]}</b><small>${r.st > i ? '已達成' : how[i] + prog}</small></div>`;
     }).join('') + '</div>';
   };
-  return `<div class="modal" data-act="tree"><section class="panel" data-act="none">
-    <h2>技能樹<button class="mini-btn" data-act="tree">關閉</button></h2>
-    <div class="tnode on base"><b>基礎（開場就有）</b><small>說話・開台流程・設備</small></div>
+  return `<div class="tnode on base"><b>基礎（開場就有）</b><small>說話・開台流程・設備</small></div>
     <div class="branches">${Object.keys(ROUTES).map(col).join('')}</div>
-    <p class="tip">到 ②、③、④ 時各有一段劇情。③ 不是練出來的，要靠下播後的回放編輯留下真心片段。</p></section></div>`;
+    <p class="tip">到 ②、③、④ 時各有一段劇情。③ 不是練出來的，要靠下播後的回放編輯留下真心片段。</p>`;
+}
+
+// 設備是一次性購買，不佔時段（docs/03 2.13 A4）。買了會回到週曆，所以只有排行程時能買
+function gearBody() {
+  const can = V.mode === 'plan';
+  return `<div class="gears">${Object.keys(GEAR).map(k => (G.gear[k]
+    ? `<div class="gear own"><b>✓ ${GEAR[k].n}</b><small>已經有了　${GEAR[k].s}</small></div>`
+    : `<button class="gear" data-act="buy" data-k="${k}" ${!can || G.money < GEAR[k].cost ? 'disabled' : ''}><b>買${GEAR[k].n}</b><small>${nt(GEAR[k].cost)}　${GEAR[k].s}${can ? G.money < GEAR[k].cost ? '　錢不夠' : '' : '　排行程的時候才能買'}</small></button>`)).join('')}</div>
+    <p class="tip">手上有 ${nt(G.money)}。設備買一次就一直有效，不佔時段。</p>`;
+}
+
+function albumBody() {
+  const al = G.album || [];
+  return `<section class="info"><h3>留下的片段　${al.length} 段</h3>${al.length
+    ? `<ul class="album">${al.map(x => `<li><b>${ROUTES[x.k] ? ROUTES[x.k].n : ''}</b><small>${x.at}</small><p>${x.text}</p></li>`).join('')}</ul>`
+    : '<p class="tip">還沒有留下的片段。直播時用留言接住她，下播後在回放編輯選「留下」，就會收在這裡。</p>'}
+    <h3>剪掉的資料夾</h3><p class="tip">${G.cut ? `裡面有 ${G.cut} 段。資料夾沒有名字，她沒有打開過。` : '空的。'}</p></section>`;
+}
+
+function setBody() {
+  return `<section class="info"><h3>怎麼玩</h3><ul class="goals wrap">
+      <li>排行程：先點右邊的行動，再點週曆的格子。點週曆上「直播」那一格，選這週播什麼。</li>
+      <li>直播日：你是聊天室裡的一位草民。說話的選項在聊天室下面，打賞和許願在直播畫面下面。</li>
+      <li>下播後：回到奈實，在回放公開前決定每一段真心片段要留下還是剪掉。</li>
+      <li>只有一顆按鈕時，空白鍵或 Enter 前進；數字鍵 1–9 選第幾個選項。Esc 關掉這個面板。</li></ul>
+    <h3>這一局</h3><p class="tools"><button class="mini-btn" data-act="totitle">回到標題畫面</button><button class="mini-btn" data-act="home">換一個長度（回首頁）</button></p>
+    <p class="tip">進度自動存在這個瀏覽器裡，回到標題後可以從最近一次排行程的地方接著玩。</p></section>`;
+}
+
+function menuPanel() {
+  const tabs = Object.keys(MENU).map(k => `<button class="tab ${menuTab === k ? 'on' : ''}" data-act="menu" data-tab="${k}" data-in="1">${MENU[k]}</button>`).join('');
+  const body = { tree: treeBody, goal: goalBody, gear: gearBody, album: albumBody, set: setBody }[menuTab]();
+  return `<div class="modal" data-act="menu"><section class="panel" data-act="none" role="dialog" aria-label="${MENU[menuTab]}">
+    <div class="tabs">${tabs}<button class="mini-btn" data-act="menu">關閉 ✕</button></div>${body}</section></div>`;
 }
 
 // 任何一個行動的圖示、名稱、說明
@@ -580,7 +628,7 @@ const showName = () => (G.big ? '大企劃・' : '') + (G.mix && partner(G.show)
 // 直播內容要在排行程時先決定。沒決定就是雜談；準備是針對這個內容做的
 function showRow() {
   let wk = G.day === 7 ? G.week + 1 : G.week;
-  if (wk > 4 && G.season === G.seasons) return '<h3 class="step">① 直播都播完了</h3>';
+  if (wk > 4 && G.season === G.seasons) return '<h3 class="step">直播都播完了</h3>';
   if (wk > 4) wk = 1; // 下一季的第 1 週
   const lock = G.day === 6;
   let h = '';
@@ -607,7 +655,7 @@ function showRow() {
       '<small>直播日晚上不開台，改成休息：壓力 −3　心力 +2　沒有片段。休播不是失敗</small></p>';
   }
   const why = lock ? '今天就是直播日，不能再改' : '沒選就是雜談。準備是針對這個內容做的，換了要重新準備';
-  return `<h3 class="step">① ${G.day === 7 ? '下週' : '這週'}直播播什麼<small>${why}</small></h3><div class="palette">${h}</div>${bigRow}`;
+  return `<h3 class="step">${G.day === 7 ? '下週' : '這週'}直播播什麼<small>${why}</small></h3><div class="palette">${h}</div>${bigRow}`;
 }
 
 function setShow(k, big) {
@@ -626,14 +674,14 @@ function tips(F) {
   const n = w => cells.filter(o => o.warn.startsWith(w)).length;
   const L = F.live && !F.live.off ? F.live : null;
   const t = [];
-  if (G.crisis && !G.offLive && G.day < 6) t.push('這週她撐不住了。可以在 ① 選「這週休播」，讓她休息一晚。');
+  if (G.crisis && !G.offLive && G.day < 6) t.push('這週她撐不住了。點週曆上直播那一格，可以選「這週休播」，讓她休息一晚。');
   if (G.deadline) t.unshift(`期中報告：這週研習要上 ${G.deadline.need} 次，目前排了 ${G.plan.flat().filter(a => a === 'study').length + G.wk.study} 次。`);
   if (n('硬撐')) t.push(`有 ${n('硬撐')} 格會硬撐（心力不夠）。多排一點休息，或少做一件事。`);
   if (L && L.push) t.push('照這樣排，開播時心力不夠。直播日之前留一點休息。');
   if (L && L.fall) t.push(`開播時靈感不到 ${INSP.big}，季末大企劃會變成一般版。`);
   else if (L && L.insp < INSP.show) t.push('開播時靈感不夠，只能播陽春版。排一次找靈感。');
   if (L && L.prep < 2) t.push(`開播前的準備只有 ${L.prep}/2。準備越足，失誤越少、SC 越多；滿 2 次開播前也比較不緊張。`);
-  if (n('錢不夠')) t.push('有幾格的錢不夠。排一班上班，或等直播的 SC 入帳。');
+  if (n('錢不夠')) t.push('有幾格的錢不夠。排一班上班；直播幾乎賺不到錢。');
   const left = G.plan.slice(G.day - 1).flat();
   const can = Object.keys(ROUTES).filter(k => G.r[k].st === 1);
   if (can.length && !Object.keys(G.r).some(k => G.r[k].st >= 2) && !left.some(a => a && a.startsWith('skill:'))) {
@@ -642,11 +690,11 @@ function tips(F) {
   if (canStudy() && STUDY_DAYS.some(d => d >= G.day) && G.study < 100 && !left.includes('study')) t.push('這週沒排大四研習。研習只開在週二、週四，晚上不開。');
   if (n('靈感已滿')) t.push('有幾格找靈感時靈感已經滿了，可以換成別的事。');
   const wk4 = Object.keys(ROUTES).find(k => G.r[k].st === 3);
-  if (G.week === 4 && G.day < 6 && wk4 && !(G.big && G.show === wk4)) t.unshift(`第 4 週了。把直播內容選成${ROUTES[wk4].n}並做成季末大企劃，就能到「④ 代表作」。`);
+  if (G.week === 4 && G.day < 6 && wk4 && !(G.big && G.show === wk4)) t.unshift(`第 4 週了。點週曆上直播那一格，選${ROUTES[wk4].n}並做成季末大企劃，就能到「④ 代表作」。`);
   if (!Object.keys(G.r).some(k => G.r[k].st >= 3) && Object.keys(G.r).some(k => G.r[k].st === 2)) t.push('「③ 風格」不是練出來的：直播時用留言接住她，下播後的回放編輯留下那些片段。');
   if (n('練不上去')) t.push('有幾格練習已經練不上去了，可以換成別的事。');
   if (!t.length) t.push('照這樣排沒有明顯的問題。');
-  return `<section class="info"><h3>提醒</h3><ul class="goals wrap">${t.slice(0, 4).map(x => `<li>${x}</li>`).join('')}</ul></section>`;
+  return `<section class="info tips"><h3>提醒</h3><ul class="goals wrap">${t.slice(0, 4).map(x => `<li>${x}</li>`).join('')}</ul></section>`;
 }
 
 function grid(F) {
@@ -659,23 +707,40 @@ function grid(F) {
     const past = d < G.day;
     const row = past ? G.done[d - 1] || [] : F.cells[d - 1];
     row.forEach((o, s) => {
-      h += `<button class="cell ${past ? 'past' : ''} ${o.warn ? 'bad' : ''} ${o.t ? '' : 'empty'} ${!past && !allowed(G.brush, d, s) ? 'no' : ''} t${s}" style="grid-column:${d + 1};grid-row:${s + 2}"
+      h += `<button class="cell ${past ? 'past' : ''} ${o.warn ? 'bad' : ''} ${o.t ? '' : 'empty'} ${!past && !allowed(G.brush, d, s) ? 'no' : ''} ${!past && isLocked(d, s) ? 'lock' : ''} t${s}" style="grid-column:${d + 1};grid-row:${s + 2}"
         data-act="cell" data-d="${d}" data-s="${s}" data-a="${o.a || ''}" ${past ? 'disabled' : ''} aria-label="${DAYS[d - 1]}${SLOTN[s]}：${o.t || '空'}${o.warn ? '，' + o.warn : ''}">` +
-        (o.t ? `<span class="stk">${ICON[o.i]}</span><b>${o.t}</b>` : '<b>＋</b>') + (o.warn ? `<em>${o.warn}</em>` : '') +
-        (past ? (o.res != null ? `<i class="rate r${o.res}">${RESULT[o.res]}</i>` : '') : o.rate != null ? `<i class="rate">${o.rate}%</i>` : '') + '</button>';
+        (o.t ? `<span class="stk">${ICON[o.i]}</span><b>${o.t}</b>` : '<b>＋</b>') + (!past && isLocked(d, s) ? '<i class="pin">答應了，拿不掉</i>' : '') + (o.warn ? `<em>${o.warn}</em>` : '') +
+        (past ? (o.res != null ? `<i class="rate r${o.res}">${RESULT[o.res]}</i>` : '') : (o.rate != null ? `<i class="rate">成功 ${o.rate}%</i>` : '') + cellProg(o.a)) + '</button>';
     });
   }
+  // 直播那一格：點它選這週播什麼。靈感與準備只有這一格用得到，所以寫在這裡（docs/06 第 7 節）
   const L = F.live;
-  if (L && L.off) return h + '<div class="onair" style="grid-column:7;grid-row:4 / span 2"><b>休播</b><small>晚上好好休息<br>壓力 −3　心力 +2</small></div></div>';
-  h += `<div class="onair" style="grid-column:7;grid-row:4 / span 2"><b>直播${L ? '：' + showName() : ''}</b>` +
-    (L ? `<small>開播前預估<br>心力 ${L.heart}　靈感 ${L.insp}<br>準備 ${L.prep}/2</small>` +
-      (L.push ? '<em>會硬撐</em>' : '') + (L.fall ? '<em>靈感不夠做大企劃</em>' : '') : '<small>已下播</small>') + '</div>';
-  return h + '</div>';
+  const over = (G.day === 7 ? G.week + 1 : G.week) > 4 && G.season === G.seasons; // 直播都播完了
+  const air = inner => `<button class="onair ${pickOpen ? 'on' : ''}" data-act="pick" ${over ? 'disabled' : ''} style="grid-column:7;grid-row:4 / span 2" aria-label="直播：點這格選內容">${inner}</button></div>`;
+  const now = `<span class="gauge" data-g="insp">靈感 ${G.insp}/${INSP.max}</span><span class="gauge" data-g="prep">準備 ${G.prep}/2</span>`;
+  if (L && L.off) return h + air('<b>休播</b><small>晚上好好休息<br>壓力 −3　心力 +2</small><i class="hint">點這格可以改</i>');
+  return h + air(`<b>直播${L ? '：' + showName() : ''}</b>` +
+    (L ? `<i class="hint">點這格換內容</i>${now}<small>開播時預估<br>心力 ${L.heart}　靈感 ${L.insp}<br>準備 ${L.prep}/2</small>` +
+      (L.push ? '<em>會硬撐</em>' : '') + (L.fall ? '<em>靈感不夠做大企劃</em>' : '') : `<small>已下播</small>${over ? '' : '<i class="hint">點這格選下週的內容</i>' + now}`));
+}
+
+// 格子上的進度：練習看離「② 上手」還差多少，研習看學習度（docs/06 2.3）
+function cellProg(a) {
+  if (a === 'study') return `<small class="gauge" data-g="study">學習度 ${G.study}%</small>`;
+  if (!a || !a.startsWith('skill:')) return '';
+  const k = a.slice(6), r = G.r[k];
+  return r.st === 1 ? `<span class="bar" title="離「② 上手」 ${r.exp}/${need(k)}"><i style="width:${Math.round(r.exp / need(k) * 100)}%"></i></span>` : '';
+}
+
+function showPick() {
+  return `<div class="modal" data-act="pick"><section class="panel showpick" data-act="none" role="dialog" aria-label="直播內容">${showRow()}
+    <p class="tools"><button class="mini-btn" data-act="pick">選好了</button></p></section></div>`;
 }
 
 function render() {
   hot = null;
-  document.body.className = V.mode;
+  const rv = V.mode === 'day' && V.review;
+  document.body.className = V.mode; // 一律等於 mode。回放編輯靠 CSS 的 body:has(.review-wrap) 換成夜晚的顏色
   const app = $('#app');
   if (V.mode === 'title') {
     app.innerHTML = `<section class="sheet title-sheet">
@@ -683,49 +748,86 @@ function render() {
       <h1>中之夢</h1><p class="sub">Yumenonaka　${VERSION}・${M.n}</p>
       <p class="text">${V.text}</p><p class="ai" id="aiStatus">${AI.on ? AI.status : ''}</p></section>${buttons()}`;
   } else if (V.mode === 'dream') {
+    // 夢：純文字版面，沒有狀態列、主線倒數、選單（docs/00 5.1、docs/06 3.3）
     app.innerHTML = `<section class="sheet"><div class="who stk">${STK.kaoru(V.mood || 'normal')}</div>
       <h2>${V.title}</h2><p class="text">${V.text}</p></section>${buttons()}`;
   } else if (V.mode === 'night') {
+    // 直播版面：聊天室是主角。說話的選項在聊天室下面，花錢的在直播畫面下面（docs/06 3.4）
     const C = G.cur;
     const prog = SEGS.slice(0, C.max).map((n, i) => `<span class="${i === C.seg ? 'now' : i < C.seg ? 'past' : ''}">${n}</span>`).join('');
     const [ch, cm] = SEG_TIME[Math.min(C.seg, 3)];
-    app.innerHTML = `<header class="top"><span class="badge-live">LIVE</span>${miniClock(ch, cm, `${ch}:${String(cm).padStart(2, '0')}`, true)}<span class="when"><b>${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}${C.mix ? '×' + ROUTES[C.mix].n : ''}</b></span>
-        <span class="clipn">訂閱 ${G.subs}</span><span class="clipn">真心片段 ${C.clips.length}</span><span class="prog">${prog}</span></header>
-      <div class="live"><div class="video">
-        <div class="screen"><span class="viewers">${C.viewers} 人正在觀看</span>
-          <div class="avatar stk">${BODY.kaoru(C.mood)}</div><p class="caption">${C.cap}</p></div></div>
-        <aside class="chat"><h3>聊天室</h3><ul>${C.chat.slice(-9).map(m => `<li class="${m.c || ''}"><b>${m.n}</b>${m.t}</li>`).join('')}</ul></aside></div>
-      <div class="ask"><p>${V.line}</p></div>` +
+    const pay = c => c.i === 'coin' || c.i === 'wish';
+    const hasPay = V.choices.some(pay);
+    app.innerHTML = shell(`<header class="top"><span class="badge-live">LIVE</span>${miniClock(ch, cm, `${ch}:${String(cm).padStart(2, '0')}`, true)}<span class="when"><b>${C.big ? '季末大企劃・' : ''}${ROUTES[C.k].n}${C.mix ? '×' + ROUTES[C.mix].n : ''}</b></span>
+        <span class="prog">${prog}</span><span class="clipn heart">真心片段 ${C.clips.length}</span><span class="clipn">訂閱 ${G.subs}</span></header>
+      <div class="live">
+        <aside class="chat"><h3>聊天室</h3><ul>${C.chat.slice(-11).map(m => `<li class="${m.c || ''}"><b>${m.n}</b>${m.t}</li>`).join('')}</ul>
+          <div class="reply">${hasPay ? '<h3>你的留言</h3>' : ''}` +
       (V.onSay ? '<form class="say"><input id="sayText" maxlength="40" autocomplete="off" placeholder="自己打一句留言，由 AI 評分" aria-label="自己打一句留言"><button class="mini-btn">送出</button></form>' : '') +
-      buttons();
+      buttons(hasPay ? c => !pay(c) : null) + `</div></aside>
+        <div class="video">
+          <div class="screen"><span class="viewers">${C.viewers} 人正在觀看</span>
+            <div class="avatar stk">${BODY.kaoru(C.mood)}</div><p class="caption">${C.cap}</p></div>
+          <div class="ask"><p>${V.line}</p></div>
+          ${hasPay ? `<section class="pay"><h3>不說話，用別的方式</h3>${buttons(pay)}</section>` : ''}</div></div>`);
   } else if (V.mode === 'plan') {
+    // 行事曆版面：週曆是主體，右邊是行動、提醒與唯一的「開始」（docs/06 3.1、3.5）
     const F = forecast();
-    app.innerHTML = topbar() + `<div class="main"><section class="board">
-        <div class="note"><span class="stk face">${STK.nami(namiMood())}</span><p>${V.text}</p>${miniClock(9, 0, `${DAYS[Math.min(G.day, 7) - 1]}　上午 9:00`)}</div>
-        ${showRow()}
-        <h3 class="step">② 排行程<small>先點一張行動卡，再點格子放上去。再點一次可以拿掉，紅字是會出的問題</small></h3>
-        ${palette()}
+    app.innerHTML = shell(topbar() + `<div class="planner">
+      <section class="acts"><h3>行動</h3>${palette()}</section>
+      <section class="board">
         <div class="gridwrap">${grid(F)}</div>
-        <p class="tools"><button class="mini-btn" data-act="clear">清空還沒過的格子</button><span>點日子的標題，可以把那天的空格一次填滿</span></p></section>
-      <aside class="side"><nav class="menu"><h3>③ 排好就開始</h3>${buttons()}</nav>${tips(F)}${sideInfo()}</aside></div>`;
+        <div class="note"><span class="stk face">${STK.nami(namiMood())}</span><p>${V.text}</p></div>
+        <p class="tools"><span>先點右邊的行動，再點格子放上去；再點一次拿掉。點日子的標題可以把那天的空格填滿。紅字是會出的問題。</span><button class="mini-btn" data-act="clear">清空還沒過的格子</button></p></section>
+      <aside class="side">${tips(F)}<nav class="menu"><h3 class="vh">排好就開始</h3>${buttons()}</nav></aside></div>`);
+  } else if (rv) {
+    // 回放編輯：直播版面的時間軸變體。留下與剪掉是畫面中間的兩顆大按鈕（docs/06 1.6、3.4）
+    const c = rv.clip, r = G.r[c.k];
+    const n = Math.max(3, ...G.clips.map(x => (x.seg == null ? 0 : x.seg + 1)));
+    const marks = G.clips.map((x, j) => {
+      const seg = x.seg == null ? Math.min(n - 1, j) : x.seg;
+      const same = G.clips.filter(y => (y.seg == null ? -1 : y.seg) === (x.seg == null ? -2 : x.seg));
+      const at = x.seg == null ? 0.5 : (same.indexOf(x) + 1) / (same.length + 1);
+      return `<i class="mark ${j < rv.i ? 'done' : j === rv.i ? 'now' : ''}" style="left:${((seg + at) / n * 100).toFixed(1)}%">♥ ${j + 1}</i>`;
+    }).join('');
+    app.innerHTML = shell(topbar() + `<div class="review-wrap"><div class="rv-main">
+        <div class="screen still"><span class="viewers">回放・${ROUTES[c.k].n}</span>
+          <div class="avatar stk">${BODY.kaoru('laugh')}</div><p class="caption">${c.text}</p></div>
+        <section class="timeline"><h3>回放的時間軸<small>今晚的真心片段 ${rv.i + 1} / ${rv.total}</small></h3>
+          <div class="track">${SEGS.slice(0, n).map(t => `<span>${t}</span>`).join('')}${marks}</div></section>
+        <div class="msg"><span class="name">奈實</span><p>${rv.note}</p></div>
+        <nav class="menu decide"><h3>${V.title}</h3>${buttons()}</nav></div>
+      <aside class="rv-side"><section class="chat"><h3>那一刻的聊天室</h3><ul>${(c.chat || []).map(m => `<li class="${m.me ? 'me' : ''}"><b>${m.me ? '▶ ' : ''}${m.n}</b>${m.t}</li>`).join('') || '<li class="sys">沒有留言。</li>'}</ul></section>
+        <section class="info"><h3>${ROUTES[c.k].n}</h3><p class="tip">${r.st >= 3 ? '已經有自己的風格了。' : `留下 ${Math.min(2, r.kept)} / 2　→「③ 自己的風格」`}</p>
+          <span class="bar"><i style="width:${r.st >= 3 ? 100 : Math.min(2, r.kept) * 50}%"></i></span><p class="tip">③ 只能靠留下取得。</p></section></aside></div>`);
   } else {
-    app.innerHTML = topbar() + `<div class="main"><div class="scene t${V.sky || 0}">
+    // 房間場景版面：過日子、事件、電話、蒙太奇、下播後。場景佔滿畫面，沒有右欄（docs/06 3.2）
+    const slots = V.slots ? `<div class="slots">${SLOTN.map(t => `<span class="past">${t}</span>`).join('')}</div>` : '';
+    app.innerHTML = shell(topbar() + `<div class="scene t${V.sky || 0}">
         <div class="floor"></div><div class="beam"></div><div class="window"><i class="orb"></i><i class="stars"></i></div>
-        <div class="clock"><i class="hh"></i><i class="mm"></i></div><div class="lamp"><i class="glow"></i></div><div class="sprite stk">${BODY.nami(V.mood || 'normal')}</div>
-        <div class="msg"><span class="name">奈實</span><p>${V.text}</p></div></div>
-      <aside class="side"><nav class="menu"><h3>${V.title}</h3>${buttons()}</nav>${sideInfo()}</aside></div>`;
+        <div class="clock"><i class="hh"></i><i class="mm"></i></div><div class="lamp"><i class="glow"></i></div>${slots}<div class="sprite stk">${BODY.nami(V.mood || 'normal')}</div>
+        <div class="band"><div class="msg"><span class="name">奈實</span><p>${V.text}</p></div>
+          <nav class="menu"><h3>${V.title}</h3>${buttons()}</nav></div></div>`);
   }
-  if (showTree && G && (V.mode === 'plan' || V.mode === 'day')) app.insertAdjacentHTML('beforeend', treeModal());
+  if (G && (V.mode === 'plan' || V.mode === 'day' || V.mode === 'night')) {
+    if (pickOpen && V.mode === 'plan') app.insertAdjacentHTML('beforeend', showPick());
+    if (menuTab) app.insertAdjacentHTML('beforeend', menuPanel());
+  }
   // 只有一顆「繼續」時把焦點放上去，空白鍵或 Enter 就能前進
   const only = app.querySelectorAll('button[data-i]');
-  if (only.length === 1 && !V.onSay && V.mode !== 'plan') only[0].focus({ preventScroll: true });
+  if (only.length === 1 && !V.onSay && V.mode !== 'plan' && !menuTab) only[0].focus({ preventScroll: true });
+  if (DEBUG) dbgSync();
 }
 
 $('#app').addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (a) {
     if (a.dataset.act === 'brush') { G.brush = a.dataset.a; render(); }
-    if (a.dataset.act === 'tree') { showTree = !showTree; render(); }
+    if (a.dataset.act === 'menu') { const t = a.dataset.tab; menuTab = !t || (t === menuTab && !a.dataset.in) ? null : t; render(); }
+    if (a.dataset.act === 'pick' && !a.disabled) { pickOpen = !pickOpen; render(); }
+    if (a.dataset.act === 'buy' && !a.disabled && V.mode === 'plan') { const k = a.dataset.k; G.gear[k] = true; G.money -= GEAR[k].cost; plan(`買了${GEAR[k].n}，花了 ${nt(GEAR[k].cost)}。`); }
+    if (a.dataset.act === 'totitle') { menuTab = null; title(); }
+    if (a.dataset.act === 'home') location.href = 'index.html';
     if (a.dataset.act === 'cell') paint(+a.dataset.d, +a.dataset.s);
     if (a.dataset.act === 'day') fillDay(+a.dataset.d);
     if (a.dataset.act === 'clear') { for (let d = G.day; d <= 7; d++) G.plan[d - 1].fill(null); plan('還沒過的格子都清空了。'); }
@@ -754,7 +856,7 @@ function affects(a) {
 }
 
 const unblink = () => document.querySelectorAll('.blink').forEach(e => e.classList.remove('blink'));
-const blink = sel => { const e = $(sel); if (e) e.classList.add('blink'); };
+const blink = sel => document.querySelectorAll(sel).forEach(e => e.classList.add('blink'));
 let hot = null;
 const onHover = e => {
   const el = e.target.closest('.brush, .chip, .cell');
@@ -776,7 +878,8 @@ $('#app').addEventListener('mouseleave', () => { hot = null; unblink(); });
 // 數字鍵 1–9 對應畫面上的選項
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.ctrlKey || e.altKey || e.metaKey) return;
-  if (e.repeat || showTree) return;
+  if (e.key === 'Escape' && (menuTab || pickOpen)) { menuTab = null; pickOpen = false; render(); return; }
+  if (e.repeat || menuTab || pickOpen) return;
   const n = +e.key;
   if (!n || !V || !V.choices || V.mode === 'plan') return;
   const c = V.choices[n - 1];
@@ -868,7 +971,7 @@ function howTo() {
     '練習、研習、找靈感、準備直播不一定成功，週曆上的百分比是成功率：心力不夠、壓力高會變低，專心的路線會變高。上班和休息一定照計畫。\n' +
     '季初先選方針：專心一條路線、放下一件事。關鍵週之間是三週的蒙太奇，選一個重心帶過。每個關鍵週開頭有一件事（請託、期限、電話等）。\n' +
     ({ season: '這一版只有一季，最後一場直播的那句話決定結局。\n\n',
-      year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算，之後家裡會打來問工作：找工作，還是繼續當薰草？那通電話裡她說得出哪一句，看頻道養不養得活她（剪掉長得快）和她說不說得出口（留下才會長）。\n\n',
+      year: '這一版有四季：第 2 季末是上學期期末，第 4 季末是畢業結算，之後家裡會打來問工作：找工作，還是繼續當薰草？那通電話裡她說得出哪一句，看頻道看不看得到路（訂閱到 ' + CHAN[1] + '，剪掉長得快）和她說不說得出口（留下才會長）。\n\n',
       three: '這一版有十二季：第一年大四，第二年畢業後，第三年出路與收入。第三年最後一場直播的那句話決定結局。\n\n' })[MODE] +
     '【這一季的目標】\n' +
     '・把一條路線練到「② 上手」（練習 3 次）\n' +
@@ -878,7 +981,7 @@ function howTo() {
     '【要顧的東西】\n' +
     '心力：做事會用掉，休息和睡覺會回來；不夠還硬做就是硬撐。\n' +
     '壓力：硬撐、上班、出包、SC 收得太多、留下片段的不安都會累積，休息會減輕；太高隔天會起不來。\n' +
-    '錢：家裡每月匯一次生活費，每週有固定開銷，不夠就要上班或靠直播的 SC。存下來的錢可以買設備。\n' +
+    '錢：家裡每月匯一次生活費，每週有固定開銷，不夠就要上班。直播幾乎賺不到錢，SC 很少，常常一筆都沒有。存下來的錢可以買設備。\n' +
     '笑聲與說不出口：留下的片段越多，她越說得出口；壓力越高，越說不出口。說不出口的選項會被劃掉。\n' +
     '她認得你：直播時每做一件不是沉默的事，她就多認得你一點。認得你以後才能許新企劃；變成常客後，她緊繃時也接得住你的話。',
     choices: [{ t: '← 回到標題', on: title }] });
@@ -1140,7 +1243,7 @@ function montage(then) {
     }
     if (k === 'rest') { addStress(-3); note = '壓力減輕了不少。'; }
     if (k === 'work') { G.money += 2400; addStress(2); note = `多賺了 ${nt(2400)}。`; }
-    if (k === 'live') { G.money += 1200; G.fame += 2; G.buzz = 1; G.subs += 40; addStress(1); note = `直播多賺了 ${nt(1200)}，下一場會多一些人來看。`; }
+    if (k === 'live') { G.fame += 2; G.buzz = 1; G.subs += 40; addStress(1); note = '多開了幾場，訂閱多了一些，下一場會多一些人來看。'; }
     if (k === 'study') { G.study = clamp(G.study + 20, 0, 100); G.money -= 450; addStress(1); note = `學習度 +20，講義與車錢 ${nt(450)}。`; }
     G.money += MONTAGE_BASE;
     let bill = MONTAGE_BASE ? `這三週的開銷扣掉生活費，少了 ${nt(-MONTAGE_BASE)}。` : '這三週的開銷，剛好被那段時間的生活費抵掉。';
@@ -1202,11 +1305,9 @@ function plan(note) {
   const text = note != null ? note : V.text;
   save(text); // 每動一次行程就存，關掉再開會回到這張週曆
   const empty = G.plan.slice(G.day - 1).reduce((n, row) => n + row.filter(a => !a).length, 0);
-  // 設備是一次性購買，不佔時段（docs/03 2.13 A4）
-  const gear = Object.keys(GEAR).filter(k => !G.gear[k]).map(k => ({ i: 'coin', t: `買${GEAR[k].n}`, s: `${nt(GEAR[k].cost)}　${GEAR[k].s}`, off: G.money < GEAR[k].cost,
-    on: () => { G.gear[k] = true; G.money -= GEAR[k].cost; plan(`買了${GEAR[k].n}，花了 ${nt(GEAR[k].cost)}。`); } }));
-  view({ mode: 'plan', text, choices: [{ i: 'live', t: G.day === 1 ? '開始這一週' : `從${DAYS[G.day - 1]}繼續`,
-    s: empty ? `還有 ${empty} 格沒排，空著就是發呆` : '行程排滿了', on: runDay }].concat(gear) });
+  // 買設備在選單的「設備」（gearBody）；這個畫面往下走的按鈕只有一顆（docs/06 3.1）
+  view({ mode: 'plan', text, choices: [{ i: 'live', go: true, t: G.day === 1 ? '開始這一週' : `從${DAYS[G.day - 1]}繼續`,
+    s: empty ? `還有 ${empty} 格沒排，空著就是發呆` : '行程排滿了', on: runDay }] });
 }
 
 // 點日子的標題：用手上的行動把那天的空格填滿；手上是「拿掉」就清空那天
@@ -1263,11 +1364,11 @@ function dayEnd() {
   }
   if (G.day === 7) { title = '一週的最後一天'; c = [{ i: 'sleep', t: '睡覺', s: rest, on: () => nextDay(false) }]; }
   // 當天有到新階段的話，先看完當天的結果，按下一步時才播劇情
-  c = c.map(x => ({ ...x, on: () => story(x.on) }));
+  c = c.map((x, i) => ({ ...x, go: i === 0, on: () => story(x.on) }));
   if (G.ideaN) {
     c.push({ i: 'idea', t: '找靈感小遊戲', s: `可玩可不玩。8 秒內抓到 3 個點子，靈感再 +${INSP.mini * G.ideaN}`, on: ideaIntro });
   }
-  view({ mode: 'day', mood: namiMood(), sky: G.day === 6 ? 1 : 3, title, text: G.dayText, choices: c });
+  view({ mode: 'day', mood: namiMood(), sky: G.day === 6 ? 1 : 3, title, text: G.dayText, choices: c, slots: true });
   const P = G.play;
   G.play = null;
   if (!P || AUTO) return;
@@ -1277,7 +1378,9 @@ function dayEnd() {
   const tick = () => {
     if (!sc.isConnected) return; // 玩家已經按了別的
     sc.className = 'scene t' + P.skies[i];
+    sc.querySelectorAll('.slots span').forEach((e, j) => { e.className = j < P.skies[i] ? 'past' : j === P.skies[i] ? 'now' : ''; });
     txt.textContent = P.lines.slice(0, i + 1).join('\n');
+    txt.scrollTop = txt.scrollHeight;
     if (++i < P.lines.length) setTimeout(tick, 700);
   };
   tick();
@@ -1373,7 +1476,7 @@ function startStream() {
   // 剪掉的片段讓回放保持完美，下一場多一些人來看（docs/03 2.13 A3）
   const polish = Math.min(3, G.polish);
   G.cur = { k, big, q: G.r[k].st + G.prep + used - (pushed ? 1 : 0) + (G.gear.mic ? 1 : 0), seg: 0, max: 3, shows: rnd(4), tips: 0, over: false,
-    bonus: G.buzz * 200 + polish * 100, clips: [], chat: [], viewers: 40 + rnd(30) + Math.floor(G.subs / 25) + G.buzz * 15 + polish * 8 + (G.gear.light ? 10 : 0),
+    clips: [], chat: [], viewers: 40 + rnd(30) + Math.floor(G.subs / 25) + G.buzz * 15 + polish * 8 + (G.gear.light ? 10 : 0),
     wished: false, cap: '', mood: 'normal', m: null, near: false, polish, mix };
   if (mix) { G.cur.q++; G.cur.viewers += 10; }
   G.buzz = 0;
@@ -1487,7 +1590,7 @@ function resolve(act, text, said) {
   }
   if (act === 'tip1') { C.tips += PAY.scS; say('你', `SC ${nt(PAY.scS)}　辛苦了`, 'sc'); pre = '「謝謝你的 SC～」'; }
   if (act === 'tip4') { C.tips += PAY.scL; say('你', `SC ${nt(PAY.scL)}　一直支持妳`, 'sc'); pre = '「欸、這麼多……謝謝。」'; }
-  if (!C.over && C.tips > 300 + C.q * 200) { C.over = true; G.stat.over++; addStress(2); pre += '\n她頓了一下。（收得比這場值得的多，壓力上升）'; }
+  if (!C.over && C.tips > 60 + C.q * 40) { C.over = true; G.stat.over++; addStress(2); pre += '\n她頓了一下。（收得比這場值得的多，壓力上升）'; }
 
   const warm = act === 'warm';
   const cold = act === 'cold';
@@ -1504,7 +1607,7 @@ function resolve(act, text, said) {
   const ease = () => { if (C.eased) return '（她已經好過一點了，再多的留言也只是被看到。）'; C.eased = true; addStress(-1); return '（壓力減輕）'; };
   const before = C.clips.length;
   const notKaoru = () => { if (G.kept >= 2 && !C.notKaoru && G.nkSeason !== G.season && Math.random() < 0.35) { C.notKaoru = true; G.nkSeason = G.season; flag('nk'); say('夜貓草', '……這不是薰草吧', 'hl'); } };
-  const clip = t => { notKaoru(); G.stat[warm ? 'warm' : 'self']++; C.clips.push({ k: C.k, k2: C.mix, text: t, by: warm ? '你的留言' : '她自己', at: C.chat.length }); };
+  const clip = t => { notKaoru(); G.stat[warm ? 'warm' : 'self']++; C.clips.push({ k: C.k, k2: C.mix, text: t, by: warm ? '你的留言' : '她自己', at: C.chat.length, seg: C.seg }); };
   let out = '';
   let mood = 'normal';
   if (cold && m.type !== 'ok') G.held = (G.held || 0) + 1; // 草民要她維持人設的次數，算進「完美」那一邊
@@ -1549,7 +1652,9 @@ function closing() {
 
 function offAir() {
   const C = G.cur;
-  const gross = C.tips + 200 + C.q * 100 + rnd(5) * 50 + C.bonus + Math.floor(G.subs / 10); // 你的 SC ＋ 其他草民的（訂閱越多越多）
+  // 其他草民的 SC：小頻道大多數場次沒有人給，偶爾有一筆。品質和觀看人數只提高「有人給」的機率（docs/03 2.29 M1）
+  const others = Math.random() < clamp(0.1 + C.q * 0.05 + C.viewers / 400, 0, 0.7) ? 30 + rnd(5) * 30 : 0;
+  const gross = C.tips + others; // 你的 SC ＋ 其他草民的
   // 這場的觀看人數帶來新的訂閱（docs/03 2.24）
   const newSubs = Math.floor(C.viewers / 6);
   G.subs += newSubs;
@@ -1563,7 +1668,7 @@ function offAir() {
         : C.over ? '她摘下耳機，盯著 SC 的紀錄看了很久。'
           : stage() === 1 ? '她摘下耳機，肩膀還是緊的。'
             : '她摘下耳機，房間很安靜。';
-  let m = `（回到奈實）下播後三十秒。\n${after}\n今晚的 SC 共 ${nt(gross)}（其中你給了 ${nt(C.tips)}），平台抽三成後入帳 ${nt(total)}。`;
+  let m = `（回到奈實）下播後三十秒。\n${after}\n${gross ? `今晚的 SC 共 ${nt(gross)}（${C.tips ? `其中你給了 ${nt(C.tips)}` : '有一位草民丟了一筆'}），平台抽三成後入帳 ${nt(total)}。` : '今晚沒有人丟 SC。和平常一樣。'}`;
   if (C.notKaoru) { addStress(1); G.stat.nk = (G.stat.nk || 0) + 1; m += '\n「這不是薰草吧」那則留言，她看了好幾遍。（壓力 +1）'; }
   if (C.over) m += '\n「收了這麼多，下次不能出錯。」';
   m += n ? `\n有 ${n} 段不像薰草、像她自己的片段。回放公開前，要決定留不留。` : '\n今晚沒有哪一段脫稿，回放直接公開了。';
@@ -1585,7 +1690,7 @@ function afterChoices() {
   if (G.ext) return [{ i: 'sleep', t: '直接睡', s: '加長之後沒有力氣做別的事', on: () => nextDay(false) }];
   const last = G.week === 4 && G.season === G.seasons;
   return [
-    { i: 'cut', t: '剪輯精華', off: last, s: last ? '沒有下一場了' : `下一場多一些人來看，SC 多 ${nt(200)} 左右（抽成前）`, on: () => { G.buzz = 1; G.subs += 10; nextDay(false); } },
+    { i: 'cut', t: '剪輯精華', off: last, s: last ? '沒有下一場了' : '下一場多一些人來看，訂閱 +10', on: () => { G.buzz = 1; G.subs += 10; nextDay(false); } },
     { i: 'chat', t: '經營社群', s: `靈感 +${INSP.social}`, on: () => { G.insp = clamp(G.insp + INSP.social, 0, INSP.max); nextDay(false); } },
     { i: 'sleep', t: '早點睡', s: '多睡一點，明早多回 1 格心力', on: () => { G.early = true; nextDay(false); } },
     { i: 'prep', t: '明早改行程', s: '直接睡，週日早上回到週曆', on: () => nextDay(true) }];
@@ -1617,13 +1722,14 @@ function review(i, pre) {
   // 片段旁邊是那一刻的聊天室：奈實在這裡第一次看到草民的留言（R2）
   const chat = (c.chat || []).map(x => (x.me ? `　▶ ${x.n}：${x.t}` : `　${x.n}：${x.t}`)).join('\n');
   view({ mode: 'day', mood: 'laugh', sky: 3, title: `回放編輯　真心片段 ${i + 1}/${total}`,
+    review: { clip: c, i, total, note: `${pre ? pre + '\n' : ''}這一段，是她自己。（起因：${c.by}）要留下，還是剪掉？` },
     text: `${pre ? pre + '\n\n' : ''}【今晚・${ROUTES[c.k].n}】${c.text}\n——這一段，是她自己。（起因：${c.by}）` + (chat ? `\n\n那一刻的聊天室：\n${chat}` : ''), choices: [
       // 留下換的是「她自己」，剪掉換的是「頻道」（docs/03 2.13 A3）。放下「完美」的這一季，留下不會不安
       { i: 'heart', t: '留下', s: `讓草民看到這個她。${G.letgo === 'perfect' ? '這季放下了完美，不會不安' : '壓力 +1'}，${ROUTES[c.k].n}的真心片段 ${r.st >= 3 ? '已經夠了' : r.kept + '/2'}${c.by === '她自己' ? '（她自己鬆開的，算兩段）' : ''}${c.k2 && G.r[c.k2].st === 2 ? `，${ROUTES[c.k2].n}也算一段（混合企劃）` : ''}　收進收藏冊`, on: () => {
         r.kept += c.by === '她自己' ? 2 : 1; if (c.k2 && G.r[c.k2].st === 2) G.r[c.k2].kept += c.by === '她自己' ? 2 : 1; G.kept++; G.rv.keep++; G.album = (G.album || []).concat([{ k: c.k, text: c.text, at: seasonLabel(G) + '第 ' + G.week + ' 週' }]); // 她自己鬆開的片段比較珍貴，③ 的進度算兩段（docs/03 7.3 D1）
         if (G.letgo !== 'perfect') addStress(1);
         review(i + 1, G.letgo === 'perfect' ? '留下了。這一季說好不要求完美，她看著那一段，沒有太多不安。' : '留下了。她有點不安，但沒有按下刪除。'); } },
-      { i: 'cut', t: '剪掉', s: `回放保持完美：下一場多一些人來看，SC 多 ${nt(100)} 左右。` + (r.st === 1 && r.exp < need(c.k) - 1 ? `${ROUTES[c.k].n}的練習進度 +1` : '') + '　收進剪掉的資料夾', on: () => {
+      { i: 'cut', t: '剪掉', s: '回放保持完美：下一場多一些人來看。' + (r.st === 1 && r.exp < need(c.k) - 1 ? `${ROUTES[c.k].n}的練習進度 +1` : '') + '　收進剪掉的資料夾', on: () => {
         G.cut++; G.polish++; G.rv.cut++;
         if (r.st === 1) r.exp = Math.min(need(c.k) - 1, r.exp + 1);
         review(i + 1, '剪掉了。回放裡的薰草很完美。剪下來的那段，存進了一個沒有名字的資料夾。'); } }] });
@@ -1788,7 +1894,7 @@ function yearEndCall(then) {
   const q = pass ? '「畢業了！太好了。那工作找得怎麼樣？家裡的生活費就給到這個月喔。」'
     : '「延畢？……那要再兩個月。生活費我們沒辦法再給了。」（壓力上升）';
   const chan = chanLv() === 2, say = gradSay();
-  const noChan = `頻道還養不活她（訂閱 ${G.subs}／${CHAN[1]}）`;
+  const noChan = `頻道還看不到路（訂閱 ${G.subs}／${CHAN[1]}）`;
   const noSay = laughOf(G.kept) < 2 ? `還說不出口（笑聲要到「保留」，現在是「${LAUGH[laughOf(G.kept)]}」）` : '還說不出口（她快撐不住了）';
   const opt = (k, ok, why, fx) => ({ i: 'chat', t: GRAD[k][0], off: !ok, x: !ok, s: ok ? `→ ${GRAD[k][1]}` : why,
     on: () => {
@@ -1866,7 +1972,7 @@ function epilogue(i) {
   if (G.grad && G.seasons <= 4) {
     cards[0] = ['畢業那天', `${G.endLine}\n頻道訂閱 ${G.subs}，收藏冊 ${G.kept} 段，剪掉的資料夾 ${G.cut} 段。`];
     cards[3] = ['之後', { both: '下週一，她照常排了行程。週曆上的直播日，她自己畫了一朵花。\n週末，家裡打來，問她最近的直播。她說：「下次傳給你們看。」',
-      hide: '她照常開播，SC 入帳，房租付得出來。\n家裡偶爾問起工作，她說「還不錯」。這句話她越說越熟。',
+      hide: '她照常開播，房租靠多排的班付。\n家裡偶爾問起工作，她說「還不錯」。這句話她越說越熟。',
       side: '平日上班，週六晚上開播。聊天室的人少了一些，留下來的都認得她的笑聲。',
       job: '她投了幾份履歷。頻道先放著，密碼還記得。\n沒有人問她薰草去哪了，因為沒有人知道。' }[G.grad]];
   }
@@ -1936,3 +2042,176 @@ if (AUTO) {
     if (b.length) pick(b).click();
   }, 1);
 }
+
+// ---------- 設計測試面板：網址加 ?debug（docs/03 2.28） ----------
+// 跳到指定的季、週與畫面，或直接改數值。開著的時候不讀寫存檔（TEST）。
+// 面板的按鈕用 data-dbg，不用 data-i，所以 ?auto 的亂點不會點到它。
+const DBG_GO = {
+  event: ['這一週的開頭（事件）', () => weekEvent(t => plan((t ? t + '\n' : '') + '【測試】跳到這一週的開頭。'))],
+  plan: ['排行程（跳過事件）', () => plan('【測試】跳到排行程。')],
+  pick: ['排行程：選直播內容的面板', () => { plan('【測試】跳到排行程，打開直播內容的面板。'); pickOpen = true; render(); }],
+  menuTree: ['選單：技能樹', () => dbgMenu('tree')],
+  menuGoal: ['選單：目標', () => dbgMenu('goal')],
+  menuGear: ['選單：設備', () => dbgMenu('gear')],
+  menuAlbum: ['選單：收藏冊（沒有片段時補兩段測試片段）', () => {
+    if (!(G.album || []).length) G.album = [0, 1].map(i => ({ k: G.show, text: `（測試片段 ${i + 1}）她沒忍住，笑出了聲。`, at: seasonLabel(G) + '第 ' + G.week + ' 週' }));
+    dbgMenu('album');
+  }],
+  menuSet: ['選單：設定', () => dbgMenu('set')],
+  day: ['過完週一（房間場景）', () => runDay()],
+  offair: ['下播後三十秒（沒有片段）', () => { G.day = 6; startStream(); G.cur.seg = 2; offAir(); }],
+  crisis: ['排行程：撐不住的一週（可以休播）', () => { G.crisis = true; G.skip = 4; plan('【測試】撐不住的一週。點直播那一格可以選休播。'); }],
+  midweek: ['排行程：週三（前兩天已經過完）', () => { runDay(); nextDay(false); nextDay(true); }],
+  streamDay: ['直播日傍晚（該開播了）', () => { G.day = 6; runDay(); }],
+  extend: ['直播：收尾時問要不要加長', () => { G.day = 6; startStream(); G.cur.seg = 2; extendAsk(); }],
+  mini: ['找靈感小遊戲', () => { G.ideaN = 1; G.dayText = '【測試】小遊戲。'; ideaGame(); }],
+  stream: ['直播開場', () => { G.day = 6; startStream(); }],
+  review: ['回放編輯（兩段測試片段）', () => {
+    G.day = 6; G.ext = false;
+    G.clips = [0, 1].map(i => ({ k: G.show, text: `（測試片段 ${i + 1}）她沒忍住，笑出了聲。`, by: i ? '她自己' : '你的留言',
+      chat: [{ n: '茶泡', t: '草' }, { n: ME, t: '剛剛那個好好笑', me: true }] }));
+    review(0, '');
+  }],
+  weekend: ['週末結算', () => weekEnd()],
+  montage: ['蒙太奇（之後進下一週）', () => montage(() => nextWeek(''))],
+  dream: ['短夢', () => dream(false)],
+  dreamEnd: ['季末夢（之後照季末流程）', () => dream(true)],
+  exam: ['期末考', () => exam()],
+  summary: ['季的總結', () => seasonSummary()],
+  policy: ['季初方針', () => policy(() => weekEvent(t => plan((t ? t + '\n' : '') + '【測試】選完季初方針。')))],
+  grad: ['畢業那通電話', () => { if (G.exam == null) G.exam = true; yearEndCall(G.seasons > 4 ? seasonSummary : () => epilogue(0)); }],
+  last: ['最後一場的那句話', () => lastWords()],
+  epilogue: ['尾聲', () => { dbgEnd(); epilogue(0); }],
+  ending: ['結算', () => { dbgEnd(); ending(); }],
+};
+const DBG_NUM = [['heart', '心力'], ['stress', '壓力 0–10'], ['money', '錢'], ['insp', '靈感'], ['study', '學習度'], ['prep', '準備'],
+  ['subs', '訂閱'], ['fame', '被認得'], ['kept', '留下'], ['cut', '剪掉']];
+const dbgMax = k => ({ heart: HMAX(), stress: 10, insp: INSP.max, study: 100, prep: 2 }[k] || 1e9);
+// 跳到排行程並打開選單的某一個分頁
+function dbgMenu(k) { plan('【測試】跳到排行程，打開選單。'); menuTab = k; render(); }
+// 尾聲和結算要有結局才寫得出來
+function dbgEnd() { if (!G.end) { G.end = '調整後繼續'; G.endLine = '「我會繼續，用我自己的方式。」'; } }
+// 還在標題畫面時，先開一局
+function dbgEnsure() {
+  if (G) return false;
+  const first = Object.keys(ROUTES).find(k => k !== 'talk');
+  newGame(first, M.seasons);
+  G.letgo = 'practice';
+  G.focusLog.push([first, 'practice']);
+  return true;
+}
+
+function dbgInit() {
+  const opts = list => list.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  const seasons = Array.from({ length: M.seasons }, (_, i) => [i + 1, seasonLabel({ seasons: M.seasons, season: i + 1 }).trim() || '這一季']);
+  const routes = Object.keys(ROUTES);
+  const box = document.createElement('aside');
+  box.id = 'dbg';
+  box.innerHTML = `<button class="dbg-tab" data-dbg="toggle" title="快速鍵：\`">設計測試</button>
+    <div class="dbg-body" hidden>
+      <p id="dbgNow"></p>
+      <h4>跳到</h4>
+      <div class="dbg-row"><select id="dbgSeason" aria-label="季">${opts(seasons)}</select>
+        <select id="dbgWeek" aria-label="週">${opts([1, 2, 3, 4].map(w => [w, `第 ${w} 週`]))}</select></div>
+      <div class="dbg-row"><select id="dbgWhere" aria-label="畫面">${opts(Object.keys(DBG_GO).map(k => [k, DBG_GO[k][0]]))}</select>
+        <button data-dbg="jump">跳轉</button></div>
+      <h4>數值</h4>
+      <div class="dbg-grid">${DBG_NUM.map(([k, n]) => `<label>${n}<input type="number" min="0" data-k="${k}"></label>`).join('')}</div>
+      <p id="dbgInfo"></p>
+      <h4>路線與方針</h4>
+      <div class="dbg-grid">${routes.map(k => `<label>${ROUTES[k].n}<select data-r="${k}">${opts(ST.map((t, i) => [i, t]))}</select></label>`).join('')}
+        <label>專心<select id="dbgFocus">${opts(routes.map(k => [k, ROUTES[k].n]))}</select></label>
+        <label>放下<select id="dbgLetgo">${opts(Object.keys(LETGO).map(k => [k, LETGO[k]]))}</select></label>
+        <label>期末<select id="dbgExam">${opts([['', '還沒考'], ['1', '合格'], ['0', '沒過']])}</select></label>
+        <label class="dbg-check"><input type="checkbox" id="dbgTold">家裡知道她在直播</label></div>
+      <div class="dbg-row"><button data-dbg="apply">套用</button><button data-dbg="applyJump">套用並重新跳轉</button></div>
+      <p class="dbg-hint">已經出現的選項不會重算；要看數值對選項的影響，用「套用並重新跳轉」。</p>
+      <h4>整包狀態（JSON）</h4>
+      <textarea id="dbgJson" rows="3" spellcheck="false" aria-label="狀態 JSON"></textarea>
+      <div class="dbg-row"><button data-dbg="dump">讀出現在的狀態</button><button data-dbg="load">套用這段 JSON</button></div>
+      <p class="dbg-hint">測試面板開著時不讀寫存檔。</p>
+    </div>`;
+  document.body.appendChild(box);
+  const body = box.querySelector('.dbg-body');
+  const toggle = () => { body.hidden = !body.hidden; if (!body.hidden) dbgSync(); };
+  // 面板裡打字不要觸發遊戲的數字鍵
+  box.addEventListener('keydown', e => e.stopPropagation());
+  document.addEventListener('keydown', e => { if (e.key === '`' && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); toggle(); } });
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-dbg]');
+    if (!b) return;
+    const act = b.dataset.dbg;
+    if (act === 'toggle') toggle();
+    if (act === 'jump') dbgJump();
+    if (act === 'apply') { if (dbgApply()) render(); }
+    if (act === 'applyJump') { dbgApply(); dbgJump(); }
+    if (act === 'dump') { $('#dbgJson').value = G ? JSON.stringify({ ...G, cur: null, play: null }) : ''; $('#dbgJson').select(); }
+    if (act === 'load') {
+      let v = null;
+      try { v = JSON.parse($('#dbgJson').value); } catch (err) { /* 下面一起處理 */ }
+      if (!v || !v.plan || !v.r || !v.stat) { $('#dbgNow').textContent = '這段 JSON 讀不出來，或不是遊戲狀態。'; return; }
+      G = v;
+      menuTab = null;
+      pickOpen = false;
+      plan('【測試】已套用 JSON 的狀態。');
+    }
+  });
+  dbgSync();
+}
+
+// 把現在的狀態填回面板。每次畫面更新都會跑
+function dbgSync() {
+  const box = $('#dbg');
+  if (!box || !V) return;
+  $('#dbgNow').textContent = G ? `現在：${seasonLabel(G)}第 ${G.week} 週　${DAYS[Math.min(G.day, 7) - 1]}｜${V.title || { plan: '排行程', night: '直播', title: '標題或季初方針' }[V.mode] || V.mode}`
+    : '還沒開始。跳轉或套用時會自動開一局。';
+  if (!G) { $('#dbgInfo').textContent = ''; return; }
+  box.querySelectorAll('[data-k]').forEach(el => { el.value = G[el.dataset.k]; el.max = dbgMax(el.dataset.k); });
+  box.querySelectorAll('[data-r]').forEach(el => { el.value = G.r[el.dataset.r].st; });
+  $('#dbgSeason').value = clamp(G.season, 1, M.seasons);
+  $('#dbgWeek').value = clamp(G.week, 1, 4);
+  $('#dbgFocus').value = G.focus;
+  $('#dbgLetgo').value = G.letgo || 'practice';
+  $('#dbgExam').value = G.exam == null ? '' : G.exam ? '1' : '0';
+  $('#dbgTold').checked = !!G.told;
+  $('#dbgInfo').textContent = `壓力：${STRESS[stage()]}　笑聲：${LAUGH[laughOf(G.kept)]}　認得：${FAME[fameOf(G.fame)]}　頻道：${CHAN_N[chanLv()]}　說得出口的程度 ${voiceLv()}`;
+}
+
+// 把面板上的數值寫回狀態。剛開的新局沒有東西可寫，回傳 false
+function dbgApply() {
+  if (dbgEnsure()) { plan('【測試】開了一局新的。'); return false; }
+  const box = $('#dbg');
+  box.querySelectorAll('[data-k]').forEach(el => { G[el.dataset.k] = clamp(Math.round(+el.value || 0), 0, dbgMax(el.dataset.k)); });
+  box.querySelectorAll('[data-r]').forEach(el => { G.r[el.dataset.r].st = clamp(+el.value || 0, 0, 4); });
+  G.focus = $('#dbgFocus').value;
+  if (!G.r[G.focus].st) G.r[G.focus].st = 1; // 專心的路線至少要解鎖
+  G.letgo = $('#dbgLetgo').value;
+  const ex = $('#dbgExam').value;
+  G.exam = ex === '' ? null : ex === '1';
+  G.told = $('#dbgTold').checked;
+  return true;
+}
+
+function dbgJump() {
+  dbgEnsure();
+  G.season = clamp(+$('#dbgSeason').value || 1, 1, G.seasons);
+  G.week = clamp(+$('#dbgWeek').value || 1, 1, 4);
+  G.day = 1;
+  G.done = [];
+  G.cur = null;
+  G.clips = [];
+  G.offLive = false;
+  G.crisis = false;
+  G.weigh = false;
+  G.called = false;
+  G.deadline = null;
+  G.morning = '';
+  G.skip = 0;
+  startLocks();
+  if (!G.r[G.show] || !G.r[G.show].st) setShowQuiet('talk');
+  menuTab = null;
+  pickOpen = false;
+  stopMini(); // 從小遊戲跳走時，停掉它的計時器
+  DBG_GO[$('#dbgWhere').value][1]();
+}
+if (DEBUG) dbgInit();

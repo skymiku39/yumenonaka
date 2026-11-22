@@ -26,8 +26,20 @@ async function begin(letgo) {
   await click('歌回');
   await policy(letgo);
 }
+// 直播內容：點週曆上直播那一格打開面板，在面板裡照順序點（沒有或不能按的就跳過），再關掉
+async function show(...names) {
+  const o = d.querySelector('.onair');
+  if (!o || o.disabled) return;
+  if (!d.querySelector('.showpick')) { o.click(); await sleep(30); }
+  for (const n of names) {
+    const b = [...d.querySelectorAll('.showpick button')].find(b => !b.disabled && b.textContent.includes(n));
+    if (b) { b.click(); await sleep(30); }
+  }
+  const c = [...d.querySelectorAll('.showpick button')].find(b => b.textContent.includes('選好了'));
+  if (c) { c.click(); await sleep(30); }
+}
 async function setup() {
-  await click('歌回'); // ① 直播內容
+  await show('歌回'); // 直播內容
   await fill(WEEK);
 }
 // 一直往前玩，直到 stop() 成立或一季結束
@@ -42,7 +54,7 @@ async function advance(stop, max = 400) {
         lastWeek = w;
         if (w === 1) await setup();
         else {
-          if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃');
+          await show('歌回', '做成季末大企劃');
         }
       }
       const go = btns().find(b => b.dataset.i === '0');
@@ -77,7 +89,7 @@ SCRIPTS.dream = async () => { await begin(); await advance(() => d.body.classNam
 SCRIPTS.story = async () => { await begin(); await advance(() => (d.querySelector('.menu h3') || {}).textContent.startsWith('劇情')); out(text()); };
 SCRIPTS.plan4 = async () => { await begin(); await advance(() => d.body.className === 'plan' && f.contentWindow.eval('G.week') === 4); out(state()); };
 SCRIPTS.exam = async () => { await begin(); await advance(() => has('進考場')); out(text()); };
-SCRIPTS.tree = async () => { await begin(); await advance(() => d.body.className === 'plan' && f.contentWindow.eval('G.week') === 3); await click('看整棵樹'); };
+SCRIPTS.tree = async () => { await begin(); await advance(() => d.body.className === 'plan' && f.contentWindow.eval('G.week') === 3); await click('技能樹'); };
 SCRIPTS.full = async () => { await begin(); await advance(null, 1500); out(stats()); };
 SCRIPTS.mini = async () => { await begin(); await setup(); await click('開始這一週'); await sleep(200); await click('找靈感小遊戲'); await click('開始'); await sleep(1500); };
 SCRIPTS.save = async () => {
@@ -136,7 +148,7 @@ const ALLDAYS = [1, 2, 3, 4, 5, 6, 7];
 async function fillAll(name) { await click(name); for (const dd of ALLDAYS) { d.querySelector(`.dh[data-d="${dd}"]`).click(); await sleep(15); } }
 // 完美主義：要她維持人設，有片段就剪掉
 SCRIPTS.perfect = () => play({ order: ['想聽精靈的回答', '這不是薰草', '可以更好吧', '準時下播', '剪輯精華', '早點睡', '剪掉', '照理想做'],
-  week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
+  week: async w => { if (w === 1) await setup(); else await show('歌回'); } });
 // 什麼都不排
 SCRIPTS.lazy = () => play({ order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'] });
 // 不休息，只上班和練習
@@ -152,32 +164,32 @@ SCRIPTS.spender = () => play({ order: ['沉默', '準時下播', '早點睡', '�
 
 // 照目標排行程，但每段都接住她、回看全部剪掉
 SCRIPTS.cutter = () => play({ letgo: '放下：研習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做'],
-  montage: '多直播', week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
+  montage: '多直播', week: async w => { if (w === 1) await setup(); else await show('歌回'); } });
 // 照目標排行程，每段都接住她、全部留下；蒙太奇都休息
 SCRIPTS.carer = () => play({ order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'],
-  week: async w => { if (w === 1) await setup(); else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } } });
+  week: async w => { if (w === 1) await setup(); else { await show('歌回', '做成季末大企劃'); } } });
 // 同上，但放下研習、蒙太奇都練習（看壓力撐不撐得住）
 SCRIPTS.grinder = () => play({ letgo: '放下：研習', montage: '多練習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'],
-  week: async w => { if (w === 1) { await fillAll('練習歌回'); await click('歌回'); } else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } } });
+  week: async w => { if (w === 1) { await fillAll('練習歌回'); await show('歌回'); } else { await show('歌回', '做成季末大企劃'); } } });
 // 只顧生活：每天上班與休息，直播全部沉默
 SCRIPTS.worker = () => play({ letgo: '放下：練習', montage: '多工作', order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'],
   week: async w => { if (w === 1) { await fillAll('在家休息'); await click('上班'); for (const dd of [1, 2, 3, 4, 5]) await cell(dd, 0); } } });
 
 // 同 cutter，但最後一場選「謝謝大家」：剪掉的玩家也要能完成階段並結束活動（docs/03 2.8、2.19）
 SCRIPTS.curtain = () => play({ letgo: '放下：研習', order: ['照實說也沒關係', '笑死，好可愛', '這段好好聽', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做', '「謝謝大家'],
-  montage: '多直播', week: async w => { if (w === 1) await setup(); else if (has('歌回')) await click('歌回'); } });
+  montage: '多直播', week: async w => { if (w === 1) await setup(); else await show('歌回'); } });
 
 // ---- 第一年（四季） ----
 const KEEPER = ['照實說也沒關係', '笑死，好可愛', '這段好好', '這波操作', '聲音好舒服', '準時下播', '早點睡', '留下', '「那也是我。」', '說出感受', '照理想做'];
-const BIGWEEK = async w => { if (w === 1) await setup(); else { if (has('歌回')) await click('歌回'); if (has('做成季末大企劃')) await click('做成季末大企劃'); } };
+const BIGWEEK = async w => { if (w === 1) await setup(); else { await show('歌回', '做成季末大企劃'); } };
 SCRIPTS.yfull = () => play({ year: true, order: KEEPER, week: BIGWEEK });
 // 同上，但每季換一條專心的路線，直播內容也跟著換
 const ROTATE = async w => {
   if (w === 1) return setup();
   const k = f.contentWindow.eval('G.focus'); const n = f.contentWindow.eval('ROUTES[G.focus].n');
-  if (has(n)) await click(n);
+  await show(n);
   if (f.contentWindow.eval('G.r[G.focus].st') === 1) { await click('練習' + n); for (const dd of [1, 5]) { if (!f.contentWindow.eval(`G.plan[${dd - 1}][0] === "skill:${k}"`)) await cell(dd, 0); } }
-  if (has('做成季末大企劃')) await click('做成季末大企劃'); };
+  await show('做成季末大企劃'); };
 SCRIPTS.yrotate = () => play({ year: true, foci: ['歌回', '雜談', '遊戲', '聲音'], order: KEEPER, week: ROTATE });
 SCRIPTS.ycutter = () => play({ year: true, letgo: '放下：研習', montage: '多直播', order: ['照實說也沒關係', '笑死，好可愛', '這段好好', '準時下播', '剪輯精華', '早點睡', '剪掉', '說出感受', '照理想做'], week: BIGWEEK });
 SCRIPTS.ylazy = () => play({ year: true, order: ['沉默', '準時下播', '早點睡', '剪掉', '沉默'] });
@@ -193,7 +205,7 @@ SCRIPTS.zlazy = () => play({ three: true, order: ['沉默', '準時下播', '早
 // ---- 針對特定規則的檢查 ----
 // 先在 ① 留下兩段，回看日當天才練到 ②：應該當天就升到 ③
 SCRIPTS.late3 = async () => {
-  await begin(); await click('歌回');
+  await begin(); await show('歌回');
   await fill([['練習歌回', [[7, 0], [7, 1]]], ['找靈感', [[1, 0]]]]);
   await advance(() => has('下一週'), 200);
   out('歌回應該是 ③：' + f.contentWindow.eval('JSON.stringify(G.r.sing)'));
@@ -222,7 +234,7 @@ SCRIPTS.crisis = async () => {
   await begin(); await advance(() => has('下一週'));
   f.contentWindow.eval('G.stress = 9'); await click('下一週'); await click('多工作'); await click('繼續 ▶'); await click('知道了');
   out(text()); out('crisis=' + f.contentWindow.eval('G.crisis') + ' 週一：' + d.querySelector('.cell[data-d="1"][data-s="0"]').textContent);
-  d.querySelector('[data-act="off"]').click(); await sleep(30);
+  await show('這週休播');
   out('休播=' + f.contentWindow.eval('G.offLive') + '　' + d.querySelector('.onair').textContent);
   await advance(() => has('休播，早點休息')); await click('休播，早點休息'); out(text());
 };
@@ -244,7 +256,7 @@ SCRIPTS.call = async () => {
 };
 // 設備：買了麥克風之後錢變少、之後每場品質 +1
 SCRIPTS.gear = async () => {
-  await begin(); f.contentWindow.eval('G.money = 5000; plan("")'); await click('買新麥克風');
+  await begin(); f.contentWindow.eval('G.money = 5000; plan("")'); await click('設備'); await click('買新麥克風');
   out(text() + ' money=' + f.contentWindow.eval('G.money') + ' gear=' + f.contentWindow.eval('JSON.stringify(G.gear)'));
 };
 // 結算畫面的「複製這局的紀錄」：要有結算、統計、每週一行
@@ -269,7 +281,7 @@ SCRIPTS.epicut = async () => { await begin(); f.contentWindow.eval('void 0'); aw
 // 混合企劃：兩條路線到 ② 才能勾；這場的片段留下時兩條都算
 SCRIPTS.mix = async () => {
   await begin(); f.contentWindow.eval('G.r.talk.st = 2; G.r.sing.st = 2; plan("")');
-  await click('歌回'); await click('做成混合企劃'); out(text()); await click('開始這一週');
+  await show('歌回', '做成混合企劃'); out(text()); await click('開始這一週');
   await advance(() => d.body.className === 'night' && has('沉默')); out('直播標題：' + d.querySelector('.top .when').textContent);
   await advance(() => has('剪掉')); out('留下的小字：' + btns()[0].textContent);
   const before = f.contentWindow.eval('G.r.talk.kept'); await click('留下'); out('雜談 kept：' + before + ' → ' + f.contentWindow.eval('G.r.talk.kept'));
