@@ -6,9 +6,7 @@
 
 ## 怎麼玩
 
-線上版：<https://skymiku39.github.io/yumenonaka/>（GitHub Pages，`main` 分支更新後幾分鐘內跟著更新）。
-
-本機：用瀏覽器打開 `index.html`（首頁）就可以，不需要安裝任何東西，也不需要伺服器。也可以直接打開 `season.html`、`year.html`、`three.html`。
+網頁版：<https://skymiku39.github.io/yumenonaka/>（GitHub Pages，`main` 分支更新後幾分鐘內跟著更新），用瀏覽器打開就能玩，不用安裝任何東西。首頁可以選一季、第一年、三年，也可以直接打開 `season.html`、`year.html`、`three.html`。
 
 一週的流程：
 
