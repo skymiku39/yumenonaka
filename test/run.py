@@ -23,6 +23,10 @@ import tempfile
 import threading
 import urllib.parse
 
+# Windows 的主控台預設是 cp950，印到「・」之類的字會當掉，所以自己改成 UTF-8
+for _stream in (sys.stdout, sys.stderr):
+    _stream.reconfigure(encoding='utf-8', errors='replace')
+
 GAME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS_JS = os.path.join(GAME, 'test', 'scripts.js')
 
